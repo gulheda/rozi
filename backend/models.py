@@ -23,7 +23,7 @@ class Ihbar(Base):
     embedding_json = Column(Text, nullable=True)  # JSON string olarak sakla
     olusturulma = Column(DateTime, default=datetime.utcnow)
 
-    duplicates = relationship("Ihbar", backref="original", foreign_keys=[duplicate_id])
+    duplicates = relationship("Ihbar", backref="original", foreign_keys=[duplicate_id], remote_side=[id])
     atamalar = relationship("Atama", back_populates="ihbar")
 
 

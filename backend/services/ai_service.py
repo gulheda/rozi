@@ -1,12 +1,13 @@
 import os
 import base64
 import json
+import requests
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 SYSTEM_PROMPT = """Sen bir afet koordinasyon asistanısın. Türkiye'deki deprem sonrası enkaz ihbarlarını analiz ediyorsun.
 
@@ -24,36 +25,76 @@ Sana bir enkaz fotoğrafı (varsa) ve form verisi gelecek. Şunları çıkar:
   * Adres detaylıysa: +20
   * Kişi sayısı belirliyse: +25
 
-- ihtiyac_turu: vinç / ambulans / ilaç / gonullu / tirci / diger
-
-- canli_var: true/false (tahmini)
-
 - ozet: Tek cümle, Türkçe, operatör için özet.
 
 SADECE geçerli JSON döndür, başka metin ekleme:
-{
-  "oncelik_skoru": <int>,
-  "guven_skoru": <int>,
-  "ihtiyac_turu": "<string>",
-  "canli_var": <bool>,
-  "ozet": "<string>"
-}"""
+{"oncelik_skoru": <int>, "guven_skoru": <int>, "ozet": "<string>"}"""
 
 
-def hesapla_guven_skoru(ses_var: bool, adres: str, fotograf_var: bool, kisi_sayisi: str) -> int:
-    skor = 0
-    if fotograf_var:
-        skor += 30
+def internet_var_mi() -> bool:
+    try:
+        requests.get("https://api.openai.com", timeout=3)
+        return True
+    except Exception:
+        return False
+
+
+def kural_bazli_analiz(ses_var: bool, kisi_sayisi: str, ihtiyac: str, adres: str) -> dict:
+    skor = 30
     if ses_var:
-        skor += 25
-    if len(adres) > 20:
+        skor += 30
+    if "10" in str(kisi_sayisi) or "5+" in str(kisi_sayisi):
         skor += 20
-    if kisi_sayisi not in ("bilinmiyor", ""):
+    elif "3" in str(kisi_sayisi) or "5" in str(kisi_sayisi):
+        skor += 10
+    if ihtiyac == "ambulans":
         skor += 25
-    return min(skor, 100)
+    elif ihtiyac in ("vinç", "tirci"):
+        skor += 20
+
+    guven = 30
+    if ses_var:
+        guven += 25
+    if len(adres) > 20:
+        guven += 20
+
+    return {
+        "oncelik_skoru": min(skor, 100),
+        "guven_skoru": min(guven, 100),
+        "ihtiyac_turu": ihtiyac,
+        "canli_var": ses_var,
+        "ozet": f"{'Canlı sesi var. ' if ses_var else ''}{ihtiyac.capitalize()} gerekli. {adres} adresinde ihbar.",
+    }
 
 
-async def analiz_et(
+def ollama_analiz(adres: str, ses_var: bool, kisi_sayisi: str, ihtiyac: str) -> dict:
+    prompt = f"""Sen bir afet koordinasyon asistanısın. Türkiye deprem senaryosunda çalışıyorsun.
+
+Enkaz ihbarı:
+- Adres: {adres}
+- Ses geliyor mu: {"Evet" if ses_var else "Hayır"}
+- Kişi sayısı: {kisi_sayisi}
+- İhtiyaç: {ihtiyac}
+
+SADECE şu JSON formatında cevap ver, başka hiçbir şey yazma:
+{{"oncelik_skoru": 75, "guven_skoru": 60, "ihtiyac_turu": "{ihtiyac}", "canli_var": {"true" if ses_var else "false"}, "ozet": "Kısa özet buraya"}}"""
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={"model": "llama3.2", "prompt": prompt, "stream": False},
+            timeout=30,
+        )
+        raw = response.json()["response"].strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        return json.loads(raw[start:end])
+    except Exception:
+        return kural_bazli_analiz(ses_var, kisi_sayisi, ihtiyac, adres)
+
+
+async def gpt4o_analiz(
     adres: str,
     ses_var: bool,
     kisi_sayisi: str,
@@ -89,20 +130,28 @@ Tahmini kişi sayısı: {kisi_sayisi}
             timeout=15,
         )
         raw = response.choices[0].message.content.strip()
-        # JSON bloğu varsa temizle
         if "```" in raw:
             raw = raw.split("```")[1].replace("json", "").strip()
-        return json.loads(raw)
+        result = json.loads(raw)
+        if "ihtiyac_turu" not in result:
+            result["ihtiyac_turu"] = ihtiyac
+        if "canli_var" not in result:
+            result["canli_var"] = ses_var
+        return result
     except Exception:
-        # AI başarısız olursa basit formülle hesapla
-        guven = hesapla_guven_skoru(ses_var, adres, fotograf_path is not None, kisi_sayisi)
-        oncelik = guven
-        if ses_var:
-            oncelik = min(oncelik + 20, 100)
-        return {
-            "oncelik_skoru": oncelik,
-            "guven_skoru": guven,
-            "ihtiyac_turu": ihtiyac,
-            "canli_var": ses_var,
-            "ozet": f"{adres} adresinde ihbar. İhtiyaç: {ihtiyac}.",
-        }
+        return kural_bazli_analiz(ses_var, kisi_sayisi, ihtiyac, adres)
+
+
+async def analiz_et(
+    adres: str,
+    ses_var: bool,
+    kisi_sayisi: str,
+    ihtiyac: str,
+    fotograf_path: str | None = None,
+) -> dict:
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if internet_var_mi() and api_key.startswith("sk-"):
+        return await gpt4o_analiz(adres, ses_var, kisi_sayisi, ihtiyac, fotograf_path)
+    else:
+        # Offline: Ollama ile dene, o da yoksa kural bazlı
+        return ollama_analiz(adres, ses_var, kisi_sayisi, ihtiyac)

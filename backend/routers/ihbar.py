@@ -15,6 +15,7 @@ from schemas import IhbarResponse, IhbarDurumGuncelle, AtamaCreate, AtamaRespons
 from services.ai_service import analiz_et
 from services.duplicate_service import metni_hazirla, embedding_uret, duplicate_bul
 from services.matching_service import kaynak_sirala
+from services.sms_service import decode_sms, encode_sms
 
 router = APIRouter(prefix="/ihbar", tags=["İhbar"])
 
@@ -139,6 +140,48 @@ async def kaynak_ata(
     await db.commit()
     await db.refresh(atama)
     return atama
+
+
+@router.post("/sms-decode", response_model=IhbarResponse)
+async def sms_ihbar_ekle(
+    sms_kodu: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """SMS kodunu çözüp ihbar olarak kaydeder."""
+    try:
+        veri = decode_sms(sms_kodu)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    metin = metni_hazirla(veri["adres"], veri["ihtiyac"], veri["kisi_sayisi"])
+    embedding = embedding_uret(metin)
+
+    mevcut = await db.execute(
+        select(Ihbar).where(Ihbar.duplicate_id.is_(None)).order_by(Ihbar.olusturulma.desc()).limit(100)
+    )
+    mevcut_liste = [
+        {"id": r.id, "embedding_json": r.embedding_json}
+        for r in mevcut.scalars().all()
+    ]
+    duplicate_id = duplicate_bul(embedding, mevcut_liste)
+
+    ihbar = Ihbar(
+        adres=veri["adres"],
+        lat=veri["lat"],
+        lng=veri["lng"],
+        ses_var=veri["ses_var"],
+        kisi_sayisi=veri["kisi_sayisi"],
+        ihtiyac=veri["ihtiyac"],
+        oncelik_skoru=veri["oncelik_skoru"],
+        guven_skoru=veri["guven_skoru"],
+        ozet=veri["ozet"],
+        duplicate_id=duplicate_id,
+        embedding_json=json.dumps(embedding),
+    )
+    db.add(ihbar)
+    await db.commit()
+    await db.refresh(ihbar)
+    return ihbar
 
 
 @router.get("/{ihbar_id}/eslesir", response_model=EslestirmeResponse)

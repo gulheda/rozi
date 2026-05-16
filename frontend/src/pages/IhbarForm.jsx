@@ -1,5 +1,23 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { postIhbar } from "../api"
+
+const NEED_MAP = {
+  "bilinmiyor": "OTHER",
+  "vinç": "CRANE",
+  "ambulans": "AMBULANCE",
+  "ilaç": "MEDICINE",
+  "gonullu": "VOLUNTEER",
+  "tirci": "TRUCK",
+}
+
+function smsCodOlustur(form, gaz, yarali) {
+  const sev = form.ses_var ? "RED" : (yarali ? "ORANGE" : "GREEN")
+  const konum = form.lat && form.lng ? `${parseFloat(form.lat).toFixed(4)},${parseFloat(form.lng).toFixed(4)}` : "0,0"
+  const kisi = form.kisi_sayisi === "5+" ? 5 : form.kisi_sayisi === "3-5" ? 3 : form.kisi_sayisi === "1-2" ? 1 : 0
+  const need = NEED_MAP[form.ihtiyac] || "OTHER"
+  const adres = form.adres.slice(0, 30).replace(/\|/g, " ")
+  return `EQ|${sev}|${konum}|INJ:${yarali ? 1 : 0}|TRP:${form.ses_var ? 1 : 0}|VOICE:${form.ses_var ? 1 : 0}|GAS:${gaz ? 1 : 0}|NEED:${need}|CNT:${kisi}|ADDR:${adres}`
+}
 
 export default function IhbarForm() {
   const [form, setForm] = useState({
@@ -15,7 +33,30 @@ export default function IhbarForm() {
   const [loading, setLoading] = useState(false)
   const [sonuc, setSonuc] = useState(null)
   const [hata, setHata] = useState(null)
+  const [gaz, setGaz] = useState(false)
+  const [yarali, setYarali] = useState(false)
+  const [offlineMod, setOfflineMod] = useState(false)
+  const [smsKodu, setSmsKodu] = useState("")
+  const [kopya, setKopya] = useState(false)
   const fileRef = useRef()
+
+  useEffect(() => {
+    // İnternet bağlantısını kontrol et
+    const kontrol = async () => {
+      try {
+        await fetch("https://api.openai.com", { method: "HEAD", signal: AbortSignal.timeout(3000) })
+      } catch {
+        setOfflineMod(true)
+      }
+    }
+    kontrol()
+  }, [])
+
+  useEffect(() => {
+    if (offlineMod && form.adres) {
+      setSmsKodu(smsCodOlustur(form, gaz, yarali))
+    }
+  }, [form, gaz, yarali, offlineMod])
 
   const konumAl = () => {
     navigator.geolocation.getCurrentPosition(
@@ -82,8 +123,40 @@ export default function IhbarForm() {
 
   return (
     <div className="max-w-lg mx-auto mt-8 px-4">
-      <h1 className="text-2xl font-bold mb-1">Enkaz İhbarı</h1>
-      <p className="text-gray-400 text-sm mb-6">Lütfen bilgileri doldurun, AI analiz edecek.</p>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold">Enkaz İhbarı</h1>
+        <button
+          onClick={() => setOfflineMod((v) => !v)}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition ${offlineMod ? "bg-orange-900 border-orange-600 text-orange-300" : "bg-gray-800 border-gray-700 text-gray-400"}`}
+        >
+          {offlineMod ? "📵 Offline Mod" : "🌐 Online Mod"}
+        </button>
+      </div>
+      <p className="text-gray-400 text-sm mb-4">
+        {offlineMod
+          ? "İnternet yok — SMS kodu oluşturulacak. 📱 Kodu 182'ye veya koordinasyon merkezine gönderin."
+          : "Bilgileri doldurun, AI analiz edecek."}
+      </p>
+
+      {offlineMod && (
+        <div className="bg-orange-950 border border-orange-700 rounded-xl p-4 mb-4">
+          <p className="text-xs text-orange-300 font-semibold mb-2">📡 Offline Mod Aktif</p>
+          <p className="text-xs text-gray-400 mb-3">Formu doldurun, SMS kodu otomatik oluşur. Bu kodu koordinasyon merkezine veya <strong>182</strong>'ye gönderin.</p>
+          {smsKodu && (
+            <>
+              <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-green-400 break-all mb-2">
+                {smsKodu}
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(smsKodu); setKopya(true); setTimeout(() => setKopya(false), 2000) }}
+                className="w-full bg-orange-700 hover:bg-orange-600 py-2 rounded-lg text-xs font-semibold"
+              >
+                {kopya ? "✅ Kopyalandı!" : "📋 Kodu Kopyala"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <form onSubmit={gonder} className="space-y-4">
         {/* Fotoğraf */}
@@ -138,16 +211,24 @@ export default function IhbarForm() {
           </button>
         </div>
 
-        {/* Ses var mı */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            className="w-5 h-5 accent-red-500"
-            checked={form.ses_var}
-            onChange={(e) => setForm((f) => ({ ...f, ses_var: e.target.checked }))}
-          />
-          <span className="text-sm">Enkaz altından ses / hareket var</span>
-        </label>
+        {/* Ek sorular */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" className="w-5 h-5 accent-red-500" checked={form.ses_var}
+              onChange={(e) => setForm((f) => ({ ...f, ses_var: e.target.checked }))} />
+            <span className="text-sm">🔊 Enkaz altından ses / hareket var</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" className="w-5 h-5 accent-orange-500" checked={yarali}
+              onChange={(e) => setYarali(e.target.checked)} />
+            <span className="text-sm">🩹 Yaralı var</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" className="w-5 h-5 accent-yellow-500" checked={gaz}
+              onChange={(e) => setGaz(e.target.checked)} />
+            <span className="text-sm">⚠️ Gaz kokusu var</span>
+          </label>
+        </div>
 
         {/* Kişi sayısı */}
         <div>

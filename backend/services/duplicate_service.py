@@ -22,9 +22,13 @@ def metni_hazirla(adres: str, ihtiyac: str, kisi_sayisi: str) -> str:
 
 
 def embedding_uret(metin: str) -> list[float]:
-    model = get_model()
-    emb = model.encode(metin, normalize_embeddings=True)
-    return emb.tolist()
+    try:
+        model = get_model()
+        emb = model.encode(metin, normalize_embeddings=True)
+        return emb.tolist()
+    except Exception as e:
+        print(f"[EMBED] Model yüklenemedi, sıfır vektör kullanılıyor: {e}")
+        return [0.0] * 384
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

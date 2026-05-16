@@ -31,14 +31,6 @@ SADECE geçerli JSON döndür, başka metin ekleme:
 {"oncelik_skoru": <int>, "guven_skoru": <int>, "ozet": "<string>"}"""
 
 
-def internet_var_mi() -> bool:
-    try:
-        requests.get("https://api.openai.com", timeout=3)
-        return True
-    except Exception:
-        return False
-
-
 def kural_bazli_analiz(ses_var: bool, kisi_sayisi: str, ihtiyac: str, adres: str) -> dict:
     skor = 30
     if ses_var:
@@ -65,33 +57,6 @@ def kural_bazli_analiz(ses_var: bool, kisi_sayisi: str, ihtiyac: str, adres: str
         "canli_var": ses_var,
         "ozet": f"{'Canlı sesi var. ' if ses_var else ''}{ihtiyac.capitalize()} gerekli. {adres} adresinde ihbar.",
     }
-
-
-def ollama_analiz(adres: str, ses_var: bool, kisi_sayisi: str, ihtiyac: str) -> dict:
-    prompt = f"""Sen bir afet koordinasyon asistanısın. Türkiye deprem senaryosunda çalışıyorsun.
-
-Enkaz ihbarı:
-- Adres: {adres}
-- Ses geliyor mu: {"Evet" if ses_var else "Hayır"}
-- Kişi sayısı: {kisi_sayisi}
-- İhtiyaç: {ihtiyac}
-
-SADECE şu JSON formatında cevap ver, başka hiçbir şey yazma:
-{{"oncelik_skoru": 75, "guven_skoru": 60, "ihtiyac_turu": "{ihtiyac}", "canli_var": {"true" if ses_var else "false"}, "ozet": "Kısa özet buraya"}}"""
-
-    try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=30,
-        )
-        raw = response.json()["response"].strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        return json.loads(raw[start:end])
-    except Exception:
-        return kural_bazli_analiz(ses_var, kisi_sayisi, ihtiyac, adres)
 
 
 async def gpt4o_analiz(
@@ -150,8 +115,8 @@ async def analiz_et(
     fotograf_path: str | None = None,
 ) -> dict:
     api_key = os.getenv("OPENAI_API_KEY", "")
-    if internet_var_mi() and api_key.startswith("sk-"):
+    if api_key.startswith("sk-"):
         return await gpt4o_analiz(adres, ses_var, kisi_sayisi, ihtiyac, fotograf_path)
     else:
-        # Offline: Ollama ile dene, o da yoksa kural bazlı
-        return ollama_analiz(adres, ses_var, kisi_sayisi, ihtiyac)
+        # API key yoksa kural bazlı analiz
+        return kural_bazli_analiz(ses_var, kisi_sayisi, ihtiyac, adres)

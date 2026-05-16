@@ -201,7 +201,6 @@ export default function OperatorPanel() {
           </div>
         )}
       </div>
-      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sol: ihbar listesi */}

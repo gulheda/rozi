@@ -1,38 +1,12 @@
-import json
 from contextlib import asynccontextmanager
-from typing import List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers import ihbar, kaynak
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active: List[WebSocket] = []
-
-    async def connect(self, ws: WebSocket):
-        await ws.accept()
-        self.active.append(ws)
-
-    def disconnect(self, ws: WebSocket):
-        self.active.remove(ws)
-
-    async def broadcast(self, message: dict):
-        dead = []
-        for ws in self.active:
-            try:
-                await ws.send_text(json.dumps(message))
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.active.remove(ws)
-
-
-manager = ConnectionManager()
+from routers import ihbar, kaynak, sms
+from ws_manager import manager
 
 
 @asynccontextmanager
@@ -60,6 +34,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(ihbar.router)
 app.include_router(kaynak.router)
+app.include_router(sms.router)
 
 
 @app.websocket("/ws")

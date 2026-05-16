@@ -16,6 +16,7 @@ from services.ai_service import analiz_et
 from services.duplicate_service import metni_hazirla, embedding_uret, duplicate_bul
 from services.matching_service import kaynak_sirala
 from services.sms_service import decode_sms, encode_sms
+from ws_manager import manager
 
 router = APIRouter(prefix="/ihbar", tags=["İhbar"])
 
@@ -77,6 +78,15 @@ async def ihbar_olustur(
     db.add(yeni)
     await db.commit()
     await db.refresh(yeni)
+
+    await manager.broadcast({
+        "tip": "yeni_ihbar",
+        "ihbar_id": yeni.id,
+        "adres": yeni.adres,
+        "oncelik_skoru": yeni.oncelik_skoru,
+        "kaynak": "form",
+    })
+
     return yeni
 
 

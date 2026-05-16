@@ -56,6 +56,17 @@ app.include_router(kaynak.router)
 app.include_router(sms.router)
 
 
+@app.get("/admin/seed")
+async def admin_seed():
+    """Demo verisini zorla yükle — bir kez çağır yeter."""
+    try:
+        from seed import seed_silently
+        await seed_silently()
+        return {"ok": True, "mesaj": "Demo verisi yüklendi!"}
+    except Exception as e:
+        return {"ok": False, "hata": str(e)}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)

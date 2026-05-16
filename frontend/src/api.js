@@ -4,14 +4,15 @@ import axios from "axios"
 const BASE = import.meta.env.VITE_API_URL ||
   (window.location.port === "5173" ? "http://127.0.0.1:8000" : "")
 
-// WebSocket URL — VITE_API_URL varsa ondan türet, yoksa localhost:8000
+// WebSocket URL — VITE_API_URL varsa ondan türet, yoksa aynı origin
 export const WS_URL = (() => {
   const apiUrl = import.meta.env.VITE_API_URL
   if (apiUrl) {
-    // https://... → wss://..., http://... → ws://...
     return apiUrl.replace(/^https/, "wss").replace(/^http/, "ws") + "/ws"
   }
-  return "ws://localhost:8000/ws"
+  // Aynı origin (Render'da backend frontend'i serve ediyor)
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+  return `${proto}//${window.location.host}/ws`
 })()
 
 export const api = axios.create({ baseURL: BASE })

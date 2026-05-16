@@ -58,7 +58,7 @@ app.include_router(kaynak.router)
 app.include_router(sms.router)
 
 
-@app.get("/admin/seed")
+@app.post("/admin/seed")
 async def admin_seed():
     """Demo verisini zorla yükle — bir kez çağır yeter."""
     try:
@@ -66,6 +66,7 @@ async def admin_seed():
         await seed_silently()
         return {"ok": True, "mesaj": "Demo verisi yüklendi!"}
     except Exception as e:
+        import traceback; traceback.print_exc()
         return {"ok": False, "hata": str(e)}
 
 

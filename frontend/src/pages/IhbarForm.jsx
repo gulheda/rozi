@@ -2,33 +2,35 @@ import { useState, useRef, useEffect } from "react"
 import { postIhbar } from "../api"
 
 const IHTIYAC_SECENEKLERI = [
-  { value: "arama_kurtarma", label: "🔍 Arama kurtarma ekibi",    code: "SEARCH"    },
-  { value: "ambulans",       label: "🚑 Sağlık ekibi / Ambulans",  code: "AMBULANCE" },
-  { value: "vinc",           label: "🏗️ Vinç",                     code: "CRANE"     },
-  { value: "kepce",          label: "⚙️ Kepçe / İş makinesi",     code: "EXCAVATOR" },
-  { value: "itfaiye",        label: "🚒 İtfaiye",                  code: "FIRE"      },
-  { value: "tirci",          label: "🚛 Tır / Kamyon",             code: "TRUCK"     },
-  { value: "ilac",           label: "💊 İlaç / Tıbbi yardım",     code: "MEDICINE"  },
-  { value: "gonullu",        label: "🤝 Gönüllü",                  code: "VOLUNTEER" },
-  { value: "bilinmiyor",     label: "❓ Bilinmiyor",               code: "OTHER"     },
+  { value: "arama_kurtarma", label: "🔍 Arama kurtarma ekibi",   code: "SEARCH"    },
+  { value: "ambulans",       label: "🚑 Sağlık / Ambulans",       code: "AMBULANCE" },
+  { value: "vinc",           label: "🏗️ Vinç",                    code: "CRANE"     },
+  { value: "kepce",          label: "⚙️ Kepçe / İş makinesi",    code: "EXCAVATOR" },
+  { value: "itfaiye",        label: "🚒 İtfaiye",                 code: "FIRE"      },
+  { value: "tirci",          label: "🚛 Tır / Kamyon",            code: "TRUCK"     },
+  { value: "ilac",           label: "💊 İlaç / Tıbbi yardım",    code: "MEDICINE"  },
+  { value: "gonullu",        label: "🤝 Gönüllü",                 code: "VOLUNTEER" },
+  { value: "bilinmiyor",     label: "❓ Bilinmiyor",              code: "OTHER"     },
 ]
 
 const KISI_SECENEKLERI = [
   { value: "bilinmiyor", label: "Bilinmiyor" },
-  { value: "1-5",        label: "1 – 5" },
-  { value: "5-15",       label: "5 – 15" },
-  { value: "15+",        label: "15+" },
+  { value: "1-5",        label: "1 – 5 kişi" },
+  { value: "5-15",       label: "5 – 15 kişi" },
+  { value: "15+",        label: "15+ kişi" },
 ]
 
-function smsCodOlustur({ adres, lat, lng, ses_var, kisi_sayisi }, ihtiyaclar, gaz, yarali) {
-  const sev = ses_var ? "RED" : yarali ? "ORANGE" : "GREEN"
-  const konum = lat && lng ? `${parseFloat(lat).toFixed(4)},${parseFloat(lng).toFixed(4)}` : "0,0"
-  const kisi = kisi_sayisi === "15+" ? 15 : kisi_sayisi === "5-15" ? 5 : kisi_sayisi === "1-5" ? 1 : 0
-  const needCodes = ihtiyaclar.length
+function smsCodOlustur(form, ihtiyaclar, gaz, yarali) {
+  const sev = form.ses_var ? "RED" : yarali ? "ORANGE" : "GREEN"
+  const konum = form.lat && form.lng
+    ? `${parseFloat(form.lat).toFixed(4)},${parseFloat(form.lng).toFixed(4)}`
+    : "0,0"
+  const kisi = form.kisi_sayisi === "15+" ? 15 : form.kisi_sayisi === "5-15" ? 5 : form.kisi_sayisi === "1-5" ? 1 : 0
+  const codes = ihtiyaclar.length
     ? ihtiyaclar.map(v => IHTIYAC_SECENEKLERI.find(x => x.value === v)?.code || "OTHER").join("+")
     : "OTHER"
-  const kisaAdres = adres.slice(0, 25).replace(/\|/g, " ")
-  return `EQ|${sev}|${konum}|INJ:${yarali ? 1 : 0}|VOICE:${ses_var ? 1 : 0}|GAS:${gaz ? 1 : 0}|NEED:${needCodes}|CNT:${kisi}|ADDR:${kisaAdres}`
+  const adres = form.adres.slice(0, 25).replace(/\|/g, " ")
+  return `EQ|${sev}|${konum}|INJ:${yarali ? 1 : 0}|VOICE:${form.ses_var ? 1 : 0}|GAS:${gaz ? 1 : 0}|NEED:${codes}|CNT:${kisi}|ADDR:${adres}`
 }
 
 export default function IhbarForm() {
@@ -38,7 +40,6 @@ export default function IhbarForm() {
   const [preview, setPreview]       = useState(null)
   const [gaz, setGaz]               = useState(false)
   const [yarali, setYarali]         = useState(false)
-  const [offlineMod, setOfflineMod] = useState(false)
   const [gpsYukleniyor, setGpsY]    = useState(false)
   const [loading, setLoading]       = useState(false)
   const [sonuc, setSonuc]           = useState(null)
@@ -46,18 +47,8 @@ export default function IhbarForm() {
   const [kopya, setKopya]           = useState(false)
   const fileRef = useRef()
 
-  const smsKodu = smsCodOlustur(form, ihtiyaclar, gaz, yarali)
+  const smsKodu = form.adres ? smsCodOlustur(form, ihtiyaclar, gaz, yarali) : ""
 
-  // İnternet kontrolü
-  useEffect(() => {
-    const kontrol = () => setOfflineMod(!navigator.onLine)
-    kontrol()
-    window.addEventListener("online",  kontrol)
-    window.addEventListener("offline", kontrol)
-    return () => { window.removeEventListener("online", kontrol); window.removeEventListener("offline", kontrol) }
-  }, [])
-
-  // GPS
   const konumAl = () => {
     setHata(null)
     if (!navigator.geolocation) { setHata("Tarayıcınız konum desteklemiyor."); return }
@@ -69,10 +60,11 @@ export default function IhbarForm() {
       },
       (err) => {
         setGpsY(false)
-        const msg = err.code === 1 ? "Konum izni reddedildi. Tarayıcı ayarlarından izin verin."
-                  : err.code === 2 ? "Konum alınamadı — GPS sinyali yok."
-                  : "Konum zaman aşımına uğradı."
-        setHata("📍 " + msg)
+        setHata(
+          err.code === 1 ? "📍 Konum izni reddedildi. Tarayıcı ayarlarından izin verin." :
+          err.code === 2 ? "📍 GPS sinyali alınamadı." :
+                           "📍 Konum zaman aşımına uğradı."
+        )
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     )
@@ -107,70 +99,104 @@ export default function IhbarForm() {
     } finally { setLoading(false) }
   }
 
-  // Başarı ekranı
+  // ── BAŞARI EKRANI ─────────────────────────────────────────────────────────
   if (sonuc) {
+    const smsGonder = smsCodOlustur(
+      { adres: sonuc.adres, ses_var: sonuc.ses_var, kisi_sayisi: sonuc.kisi_sayisi, lat: sonuc.lat, lng: sonuc.lng },
+      ihtiyaclar, gaz, yarali
+    )
     const renk = sonuc.oncelik_skoru >= 70 ? "text-red-400" : sonuc.oncelik_skoru >= 40 ? "text-yellow-400" : "text-green-400"
+    const seviye = sonuc.oncelik_skoru >= 70 ? "🔴 KRİTİK" : sonuc.oncelik_skoru >= 40 ? "🟡 ORTA" : "🟢 DÜŞÜK"
+
     return (
-      <div className="max-w-md mx-auto p-4 pt-6">
-        <div className="bg-gray-900 rounded-2xl p-6 border border-green-700 text-center space-y-4">
-          <div className="text-5xl">✅</div>
-          <div>
-            <h2 className="text-xl font-bold">İhbarınız alındı!</h2>
-            <p className="text-gray-400 text-sm mt-1">Koordinasyon merkezine otomatik iletildi.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-800 rounded-xl p-3">
-              <div className={`text-3xl font-black ${renk}`}>{sonuc.oncelik_skoru}</div>
-              <div className="text-xs text-gray-500 mt-0.5">Öncelik</div>
-            </div>
-            <div className="bg-gray-800 rounded-xl p-3">
-              <div className="text-3xl font-black text-blue-400">{sonuc.guven_skoru}</div>
-              <div className="text-xs text-gray-500 mt-0.5">Güven</div>
-            </div>
-          </div>
-          {sonuc.ozet && <p className="text-sm text-gray-300 bg-gray-800 rounded-xl p-3 text-left italic">"{sonuc.ozet}"</p>}
-          {sonuc.duplicate_id && (
-            <p className="text-yellow-300 text-sm bg-yellow-950 border border-yellow-800 rounded-xl p-3">
-              ⚠️ Bu ihbar #{sonuc.duplicate_id} ile aynı bölge — sistem birleştirdi.
-            </p>
-          )}
-          <div className="bg-green-950 border border-green-800 rounded-xl p-3 text-green-300 text-sm">
-            📡 SMS merkeze otomatik gönderildi.
-          </div>
-          <button onClick={() => { setSonuc(null); setFotograf(null); setPreview(null); setIhtiyaclar([]) }}
-            className="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-xl text-sm font-semibold transition">
-            Yeni ihbar gönder
-          </button>
+      <div className="max-w-lg mx-auto p-4 pt-6 space-y-4">
+        {/* Başlık */}
+        <div className="bg-gray-900 rounded-2xl p-6 border border-green-700 text-center">
+          <div className="text-5xl mb-3">✅</div>
+          <h2 className="text-xl font-bold">İhbar #{sonuc.id} Sisteme Alındı</h2>
+          <p className="text-gray-400 text-sm mt-1">Koordinasyon merkezi bilgilendirildi.</p>
         </div>
+
+        {/* Skorlar */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-gray-800 rounded-xl p-3 text-center">
+            <div className={`text-2xl font-black ${renk}`}>{sonuc.oncelik_skoru}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Öncelik</div>
+          </div>
+          <div className="bg-gray-800 rounded-xl p-3 text-center">
+            <div className="text-2xl font-black text-blue-400">{sonuc.guven_skoru}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Güven</div>
+          </div>
+          <div className="bg-gray-800 rounded-xl p-3 text-center">
+            <div className="text-lg font-black text-gray-200">{seviye}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Seviye</div>
+          </div>
+        </div>
+
+        {/* Özet */}
+        {sonuc.ozet && (
+          <div className="bg-gray-800 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">AI Analizi</p>
+            <p className="text-sm text-gray-200 italic">"{sonuc.ozet}"</p>
+          </div>
+        )}
+
+        {/* Duplicate */}
+        {sonuc.duplicate_id && (
+          <div className="bg-yellow-950 border border-yellow-700 rounded-xl p-3 text-sm text-yellow-300">
+            ⚠️ Bu ihbar #{sonuc.duplicate_id} numaralı ihbarla aynı bölge — sistem otomatik birleştirdi.
+          </div>
+        )}
+
+        {/* SMS Kodu — kopyala gönder */}
+        <div className="bg-orange-950 border border-orange-700 rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <span className="text-xl">📡</span>
+            <div>
+              <p className="font-semibold text-orange-200 text-sm">SMS ile Merkeze Gönder</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Aşağıdaki kodu kopyalayıp <strong className="text-white">+1 (978) 754-6496</strong> numarasına SMS olarak gönderin.
+              </p>
+            </div>
+          </div>
+          <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-green-400 break-all select-all">
+            {smsGonder}
+          </div>
+          <button
+            onClick={() => { navigator.clipboard.writeText(smsGonder); setKopya(true); setTimeout(() => setKopya(false), 2500) }}
+            className={`w-full py-3 rounded-xl text-sm font-bold transition ${kopya ? "bg-green-700 text-white" : "bg-orange-700 hover:bg-orange-600 text-white"}`}
+          >
+            {kopya ? "✅ Kopyalandı! Şimdi SMS gönderin." : "📋 SMS Kodunu Kopyala"}
+          </button>
+          <a href={`sms:+19787546496&body=${encodeURIComponent(smsGonder)}`}
+            className="block w-full py-3 rounded-xl text-sm font-bold text-center bg-gray-700 hover:bg-gray-600 transition">
+            📱 Direkt SMS Uygulamasını Aç
+          </a>
+        </div>
+
+        <button
+          onClick={() => { setSonuc(null); setFotograf(null); setPreview(null); setIhtiyaclar([]); setForm({ adres: "", ses_var: false, kisi_sayisi: "bilinmiyor", lat: "", lng: "" }) }}
+          className="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-xl text-sm font-semibold transition"
+        >
+          Yeni ihbar gönder
+        </button>
       </div>
     )
   }
 
+  // ── FORM ─────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto p-4 pt-5 space-y-4">
-
-      {/* Mod seçici */}
-      <div className="flex gap-2">
-        <button onClick={() => setOfflineMod(false)}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition ${!offlineMod ? "bg-blue-700 border-blue-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400"}`}>
-          🌐 Online — Direkt Gönder
-        </button>
-        <button onClick={() => setOfflineMod(true)}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition ${offlineMod ? "bg-orange-700 border-orange-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400"}`}>
-          📵 Offline — SMS Kodu
-        </button>
+      <div>
+        <h1 className="text-xl font-bold">🆘 Enkaz İhbarı</h1>
+        <p className="text-gray-400 text-sm mt-0.5">Formu doldurun — sistem analiz edip koordinasyon merkezine iletir.</p>
       </div>
 
-      {/* Offline SMS kutusu */}
-      {offlineMod && (
-        <div className="bg-orange-950 border border-orange-700 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-orange-300">📡 Offline Mod — SMS Kodu</p>
-          <p className="text-xs text-gray-400">Formu doldurun, kod oluşsun. Kodu kopyalayıp <strong>+1 (978) 754-6496</strong> numarasına gönderin.</p>
-          <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-green-400 break-all">{smsKodu}</div>
-          <button onClick={() => { navigator.clipboard.writeText(smsKodu); setKopya(true); setTimeout(() => setKopya(false), 2000) }}
-            className="w-full bg-orange-700 hover:bg-orange-600 py-2.5 rounded-xl text-sm font-semibold transition">
-            {kopya ? "✅ Kopyalandı!" : "📋 SMS Kodunu Kopyala"}
-          </button>
+      {/* SMS Kodu Önizleme (form doldurulunca) */}
+      {smsKodu && (
+        <div className="bg-gray-800/80 rounded-xl p-3 border border-gray-700">
+          <p className="text-xs text-gray-500 mb-1">Oluşturulan SMS kodu:</p>
+          <p className="font-mono text-xs text-green-400 break-all">{smsKodu}</p>
         </div>
       )}
 
@@ -181,8 +207,7 @@ export default function IhbarForm() {
           onClick={() => fileRef.current.click()}>
           {preview
             ? <img src={preview} alt="" className="max-h-40 mx-auto rounded-lg" />
-            : <><div className="text-3xl mb-1">📷</div><p className="text-sm text-gray-400">Fotoğraf ekle <span className="text-gray-600">(opsiyonel — AI skoru artırır)</span></p></>
-          }
+            : <><div className="text-3xl mb-1">📷</div><p className="text-sm text-gray-400">Fotoğraf ekle <span className="text-gray-600">(opsiyonel — AI skoru artırır)</span></p></>}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={fotografSec} />
         </div>
 
@@ -198,11 +223,11 @@ export default function IhbarForm() {
         <div>
           <label className="block text-sm font-semibold text-gray-200 mb-1.5">🛰️ GPS Konumu</label>
           <div className="flex gap-2">
-            <input type="number" step="any" placeholder="Enlem (lat)"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+            <input type="number" step="any" placeholder="Enlem"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none"
               value={form.lat} onChange={e => setForm(f => ({ ...f, lat: e.target.value }))} />
-            <input type="number" step="any" placeholder="Boylam (lng)"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+            <input type="number" step="any" placeholder="Boylam"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none"
               value={form.lng} onChange={e => setForm(f => ({ ...f, lng: e.target.value }))} />
             <button type="button" onClick={konumAl} disabled={gpsYukleniyor}
               className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 px-4 rounded-xl text-sm font-semibold transition whitespace-nowrap">
@@ -210,7 +235,7 @@ export default function IhbarForm() {
             </button>
           </div>
           {form.lat && form.lng && (
-            <p className="text-xs text-green-400 mt-1.5">✅ {parseFloat(form.lat).toFixed(5)}, {parseFloat(form.lng).toFixed(5)}</p>
+            <p className="text-xs text-green-400 mt-1.5">✅ Konum alındı: {parseFloat(form.lat).toFixed(5)}, {parseFloat(form.lng).toFixed(5)}</p>
           )}
         </div>
 
@@ -220,16 +245,16 @@ export default function IhbarForm() {
           <div className="space-y-2.5">
             {[
               { val: form.ses_var, set: v => setForm(f => ({...f, ses_var: v})), label: "🔊 Enkaz altından ses / hareket var" },
-              { val: yarali, set: setYarali, label: "🩹 Yaralı var" },
-              { val: gaz,    set: setGaz,    label: "⚠️ Gaz kokusu var" },
+              { val: yarali,       set: setYarali, label: "🩹 Yaralı var" },
+              { val: gaz,          set: setGaz,    label: "⚠️ Gaz kokusu var" },
             ].map(({ val, set, label }) => (
               <label key={label} className="flex items-center gap-3 cursor-pointer select-none">
                 <div onClick={() => set(!val)}
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition cursor-pointer
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition
                     ${val ? "bg-red-500 border-red-500" : "border-gray-500 bg-gray-700"}`}>
                   {val && <span className="text-white text-xs font-bold">✓</span>}
                 </div>
-                <span className="text-sm text-gray-200">{label}</span>
+                <span className="text-sm">{label}</span>
               </label>
             ))}
           </div>
@@ -263,8 +288,8 @@ export default function IhbarForm() {
                 <button key={value} type="button" onClick={() => toggleIhtiyac(value)}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left transition border ${
                     secili ? "bg-red-900/50 border-red-600 text-white" : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"}`}>
-                  <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition ${secili ? "bg-red-500 border-red-500" : "border-gray-500"}`}>
-                    {secili && <span className="text-white text-xs">✓</span>}
+                  <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition ${secili ? "bg-red-500 border-red-500" : "border-gray-500"}`}>
+                    {secili && <span className="text-white text-[10px] font-bold">✓</span>}
                   </div>
                   {label}
                 </button>
@@ -273,18 +298,15 @@ export default function IhbarForm() {
           </div>
         </div>
 
-        {hata && (
-          <div className="bg-red-950 border border-red-700 rounded-xl p-3 text-sm text-red-300">{hata}</div>
-        )}
+        {hata && <div className="bg-red-950 border border-red-700 rounded-xl p-3 text-sm text-red-300">{hata}</div>}
 
         <button type="submit" disabled={loading}
           className="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-700 py-4 rounded-xl font-bold text-base transition flex items-center justify-center gap-2">
           {loading
-            ? <><span className="animate-spin inline-block">⏳</span> Analiz ediliyor, iletiliyor...</>
-            : offlineMod
-              ? "📋 SMS Kodunu Oluştur"
-              : "🆘 İhbar Gönder → Merkeze Otomatik İletilir"}
+            ? <><span className="animate-spin inline-block">⏳</span> AI analiz ediyor...</>
+            : "🆘 İhbar Gönder"}
         </button>
+        <p className="text-center text-xs text-gray-600">Gönder → AI analiz eder → SMS kodu oluşur → kopyalayıp gönderin</p>
       </form>
     </div>
   )

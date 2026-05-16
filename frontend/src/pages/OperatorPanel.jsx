@@ -281,47 +281,51 @@ export default function OperatorPanel() {
               </div>
             )}
 
-            {/* Durum güncelle */}
-            <div>
-              <p className="text-xs text-gray-400 mb-2">Durum güncelle</p>
-              <div className="flex gap-1.5">
-                {["bekliyor", "yolda", "tamam"].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => durumGuncelle(secili.id, d)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${
-                      secili.durum === d ? "bg-blue-600 text-white" : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
+            {/* Akış adımları */}
+            <div className="bg-gray-800 rounded-lg p-3 text-xs space-y-1.5">
+              <p className="text-gray-400 font-semibold mb-2">📋 Müdahale Akışı</p>
+              {[
+                { durum: "bekliyor", icon: "🟡", label: "Ekip bekleniyor",      desc: "İhbar alındı, ekip atanmadı" },
+                { durum: "yolda",   icon: "🔵", label: "Ekip yolda",           desc: "Kaynak atandı, müdahale başladı" },
+                { durum: "tamam",   icon: "🟢", label: "Kurtarma tamamlandı",  desc: "Ekip görevden döndü, kaynak serbest" },
+              ].map(({ durum, icon, label, desc }) => (
+                <button key={durum} onClick={() => durumGuncelle(secili.id, durum)}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg transition text-left ${
+                    secili.durum === durum ? "bg-blue-700/50 border border-blue-600" : "hover:bg-gray-700"}`}>
+                  <span>{icon}</span>
+                  <div>
+                    <span className="font-semibold text-white">{label}</span>
+                    <span className="text-gray-500 ml-1">— {desc}</span>
+                  </div>
+                </button>
+              ))}
             </div>
 
             {/* Önerilen kaynaklar */}
             {eslesen && (
               <div>
-                <p className="text-xs text-gray-400 mb-2">{eslesen.aciklama}</p>
+                <p className="text-xs font-semibold text-gray-300 mb-2">
+                  🚒 En Yakın Uygun Ekipler
+                </p>
+                <p className="text-xs text-gray-500 mb-2">{eslesen.aciklama}</p>
                 <div className="space-y-2">
                   {eslesen.onerilen_kaynaklar.map((k) => (
                     <div key={k.id} className="bg-gray-800 rounded-lg p-2.5 flex items-center justify-between">
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-white">{k.isim}</p>
-                        <p className="text-xs text-gray-400">{k.tip}{k.ekipman ? ` · ${k.ekipman}` : ""}</p>
-                        {k.telefon && <p className="text-xs text-blue-400">{k.telefon}</p>}
+                        <p className="text-xs text-gray-400 capitalize">{k.tip}{k.ekipman ? ` · ${k.ekipman}` : ""}</p>
+                        {k.telefon && <p className="text-xs text-blue-400">📞 {k.telefon}</p>}
                       </div>
-                      <button
-                        onClick={() => kaynakaAta(k.id)}
-                        disabled={loading}
-                        className="ml-2 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg flex-shrink-0"
-                      >
-                        Ata
+                      <button onClick={() => kaynakaAta(k.id)} disabled={loading}
+                        className="ml-2 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 text-xs px-3 py-1.5 rounded-lg flex-shrink-0 font-semibold">
+                        ✅ Ata
                       </button>
                     </div>
                   ))}
                   {eslesen.onerilen_kaynaklar.length === 0 && (
-                    <p className="text-xs text-gray-500">Uygun müsait kaynak bulunamadı.</p>
+                    <p className="text-xs text-gray-500 bg-gray-800 rounded-lg p-2">
+                      ⚠️ Bu ihtiyaç için müsait kaynak bulunamadı.
+                    </p>
                   )}
                 </div>
               </div>

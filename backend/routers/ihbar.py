@@ -15,7 +15,7 @@ from schemas import IhbarResponse, IhbarDurumGuncelle, AtamaCreate, AtamaRespons
 from services.ai_service import analiz_et
 from services.duplicate_service import metni_hazirla, embedding_uret, duplicate_bul
 from services.matching_service import kaynak_sirala
-from services.sms_service import decode_sms, encode_sms
+from services.sms_service import decode_sms, encode_sms, gorev_sms_olustur
 from services.twilio_service import sms_gonder
 from ws_manager import manager
 
@@ -175,6 +175,23 @@ async def kaynak_ata(
     db.add(atama)
     await db.commit()
     await db.refresh(atama)
+
+    # Görevlinin interneti olmayabilir → SMS ile bilgilendir
+    if kaynak.telefon:
+        try:
+            sms_metni = gorev_sms_olustur(
+                ihbar_id=ihbar.id,
+                adres=ihbar.adres,
+                lat=ihbar.lat,
+                lng=ihbar.lng,
+                ihtiyac=ihbar.ihtiyac,
+                kisi_sayisi=ihbar.kisi_sayisi,
+            )
+            sms_gonder(kaynak.telefon, sms_metni)
+            print(f"[GOREV-SMS] Kaynak #{kaynak.id} ({kaynak.isim}) → {kaynak.telefon}")
+        except Exception as e:
+            print(f"[GOREV-SMS] Hata (kaynak #{kaynak.id}): {e}")
+
     return atama
 
 

@@ -1,103 +1,236 @@
 """
-Demo verisi yükleyici — jüri sunumu için 30 gerçekçi ihbar + kaynaklar ekler.
-Çalıştır: python seed.py
+Demo verisi yükleyici — jüri sunumu için gerçekçi veri seti oluşturur.
+Kullanım: python seed.py
 """
 import asyncio
 import json
-import random
 from datetime import datetime, timedelta
-from database import init_db, SessionLocal
-from models import Ihbar, Kaynak
+from sqlalchemy import select
+from database import engine, SessionLocal, init_db
+from models import Base, Ihbar, Kaynak, Atama
 
-IHBARLAR = [
-    # Yüksek öncelik (kırmızı) — ses var, çok kişi
-    {"adres": "Hatay Antakya Akdeniz Cad. No:14", "lat": 36.2021, "lng": 36.1601, "ses_var": True, "kisi_sayisi": "5+", "ihtiyac": "vinç", "oncelik_skoru": 97, "guven_skoru": 95, "ozet": "Enkaz altında canlı sesler duyuluyor, çok katlı bina tamamen çökmüş, vinç acil."},
-    {"adres": "Hatay Antakya Narlıca Mah. Atatürk Sk. No:8", "lat": 36.2105, "lng": 36.1720, "ses_var": True, "kisi_sayisi": "3-5", "ihtiyac": "ambulans", "oncelik_skoru": 94, "guven_skoru": 90, "ozet": "Yaralı çıkarıldı, ambulans ve tıbbi ekip acil gerekiyor."},
-    {"adres": "Kahramanmaraş Merkez Trabzon Cad. No:32", "lat": 37.5858, "lng": 36.9371, "ses_var": True, "kisi_sayisi": "5+", "ihtiyac": "vinç", "oncelik_skoru": 96, "guven_skoru": 92, "ozet": "6 katlı bina tamamen yıkıldı, enkaz altında birden fazla kişi sesi var."},
-    {"adres": "Hatay İskenderun Mareşal Fevzi Çakmak Cad. No:5", "lat": 36.5853, "lng": 36.1653, "ses_var": True, "kisi_sayisi": "3-5", "ihtiyac": "vinç", "oncelik_skoru": 91, "guven_skoru": 88, "ozet": "Apartman çökmüş, bodrum katta ses var, vinç olmadan ulaşılamıyor."},
-    {"adres": "Adıyaman Merkez Cumhuriyet Mah. İnönü Cad. No:21", "lat": 37.7648, "lng": 38.2786, "ses_var": True, "kisi_sayisi": "5+", "ihtiyac": "ambulans", "oncelik_skoru": 93, "guven_skoru": 89, "ozet": "Bina çökmüş, 7 kişi mahsur, 2'si ağır yaralı."},
-    {"adres": "Hatay Antakya Armutlu Mah. Gündüz Sk. No:3", "lat": 36.1987, "lng": 36.1589, "ses_var": True, "kisi_sayisi": "1-2", "ihtiyac": "ambulans", "oncelik_skoru": 88, "guven_skoru": 85, "ozet": "Yaşlı çift enkaz altında, telefon sesi duyuluyor."},
-    {"adres": "Kahramanmaraş Elbistan Cumhuriyet Cad. No:44", "lat": 38.2095, "lng": 37.1960, "ses_var": True, "kisi_sayisi": "3-5", "ihtiyac": "vinç", "oncelik_skoru": 89, "guven_skoru": 86, "ozet": "3 katlı bina yıkıldı, düzenli ses sinyali alınıyor."},
-    {"adres": "Gaziantep Şahinbey Suburcu Mah. No:17", "lat": 37.0662, "lng": 37.3833, "ses_var": True, "kisi_sayisi": "3-5", "ihtiyac": "vinç", "oncelik_skoru": 87, "guven_skoru": 84, "ozet": "Enkaz altında ses var, 4 kişi mahsur olduğu tahmin ediliyor."},
 
-    # Orta öncelik (sarı)
-    {"adres": "Hatay Antakya Serinyol Mah. No:9", "lat": 36.2601, "lng": 36.2012, "ses_var": False, "kisi_sayisi": "3-5", "ihtiyac": "gonullu", "oncelik_skoru": 62, "guven_skoru": 70, "ozet": "Bina çökmüş, enkaz altında kişi olduğu tahmin ediliyor, ses yok."},
-    {"adres": "Malatya Merkez Battalgazi Mah. No:33", "lat": 38.3552, "lng": 38.3095, "ses_var": False, "kisi_sayisi": "1-2", "ihtiyac": "ilaç", "oncelik_skoru": 58, "guven_skoru": 65, "ozet": "Yaralı kurtarıldı, tıbbi malzeme ve ilaç ihtiyacı var."},
-    {"adres": "Hatay Kırıkhan Merkez Mah. No:12", "lat": 36.4960, "lng": 36.3590, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "gonullu", "oncelik_skoru": 55, "guven_skoru": 60, "ozet": "Mahalle hasar gördü, enkaz temizleme için gönüllü gerekiyor."},
-    {"adres": "Adıyaman Kahta İlçesi Merkez Cad. No:7", "lat": 37.7867, "lng": 38.6167, "ses_var": False, "kisi_sayisi": "1-2", "ihtiyac": "ilaç", "oncelik_skoru": 52, "guven_skoru": 58, "ozet": "Kronik ilaç ihtiyacı olan hasta enkaz sonrası ilaçsız kaldı."},
-    {"adres": "Osmaniye Merkez Atatürk Mah. No:19", "lat": 37.0742, "lng": 36.2462, "ses_var": False, "kisi_sayisi": "3-5", "ihtiyac": "gonullu", "oncelik_skoru": 60, "guven_skoru": 68, "ozet": "Yaşlı ve çocukların bulunduğu bölge, tahliye yardımı gerekiyor."},
-    {"adres": "Hatay Dörtyol Merkez Mah. No:22", "lat": 36.8452, "lng": 36.2278, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "tirci", "oncelik_skoru": 57, "guven_skoru": 62, "ozet": "Yardım malzemeleri bölgeye ulaştırılması gerekiyor, yol kısmen açık."},
-    {"adres": "Gaziantep Nizip İlçesi Cumhuriyet Cad. No:5", "lat": 37.0125, "lng": 37.7984, "ses_var": False, "kisi_sayisi": "1-2", "ihtiyac": "ambulans", "oncelik_skoru": 65, "guven_skoru": 72, "ozet": "Kırık bacaklı hasta, ambulans bekleniyor."},
+# ─── Gerçekçi kaynaklar (görevliler) ─────────────────────────────────────────
+KAYNAKLAR = [
+    # Arama kurtarma ekipleri
+    dict(isim="AKUT Hatay Ekibi",         tip="arama_kurtarma", ekipman="Termal kamera, enkaz köpeği, telsiz",      telefon="+905321234567", lat=36.2021, lng=36.1601, musait=True),
+    dict(isim="AFAD Arama Kurtarma 1",    tip="arama_kurtarma", ekipman="Hidrolik kurtarma seti, botascope",        telefon="+905339876543", lat=36.1950, lng=36.1720, musait=False),
+    dict(isim="Gönüllü Kurtarma Timi",    tip="arama_kurtarma", ekipman="El feneri, ilk yardım seti",               telefon="+905441112233", lat=36.2100, lng=36.1450, musait=True),
 
-    # Duplicate grubu (aynı enkaz, farklı ihbarlar)
-    {"adres": "Hatay Antakya Akdeniz Cad. enkaz var yardım", "lat": 36.2025, "lng": 36.1605, "ses_var": True, "kisi_sayisi": "3-5", "ihtiyac": "vinç", "oncelik_skoru": 97, "guven_skoru": 95, "ozet": "Akdeniz caddesinde enkaz, ses geliyor.", "duplicate_idx": 0},
-    {"adres": "Antakya Akdeniz Cd yakınında enkaz var", "lat": 36.2019, "lng": 36.1598, "ses_var": True, "kisi_sayisi": "bilinmiyor", "ihtiyac": "vinç", "oncelik_skoru": 97, "guven_skoru": 95, "ozet": "Akdeniz caddesi enkaz bildirimi.", "duplicate_idx": 0},
+    # Sağlık
+    dict(isim="Dr. Mehmet Yılmaz",        tip="ambulans",       ekipman="Ambulans, defibrilatör, kan grubu seti",   telefon="+905554443322", lat=36.1980, lng=36.1810, musait=True),
+    dict(isim="112 Hatay Ambulans #3",    tip="ambulans",       ekipman="Tam donanımlı ambulans, paramedik",        telefon="+905557778899", lat=36.2200, lng=36.1300, musait=False),
 
-    # Düşük öncelik (yeşil)
-    {"adres": "Hatay Antakya Yenişehir Mah. No:45", "lat": 36.2156, "lng": 36.1812, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "gonullu", "oncelik_skoru": 35, "guven_skoru": 45, "ozet": "Hasarlı bina boşaltıldı, enkaz temizliği bekliyor."},
-    {"adres": "Malatya Yeşilyurt İlçesi No:8", "lat": 38.3302, "lng": 38.2802, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "ilaç", "oncelik_skoru": 30, "guven_skoru": 40, "ozet": "Genel ilaç yardımı talebi, aciliyet düşük."},
-    {"adres": "Gaziantep Şehitkamil Güneykent Mah. No:3", "lat": 37.0489, "lng": 37.3621, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "gonullu", "oncelik_skoru": 28, "guven_skoru": 38, "ozet": "Mahalle sakinleri tahliye yardımı bekliyor."},
-    {"adres": "Osmaniye Kadirli İlçesi Merkez Mah. No:11", "lat": 37.3726, "lng": 36.0960, "ses_var": False, "kisi_sayisi": "bilinmiyor", "ihtiyac": "gonullu", "oncelik_skoru": 25, "guven_skoru": 35, "ozet": "Hafif hasar, yardım koordinasyonu gerekiyor."},
+    # Ağır ekipman
+    dict(isim="Kadir Bey — Vinç Op.",     tip="vinc",           ekipman="50 ton hidrolik vinç, lisanslı operatör",  telefon="+905326667788", lat=36.1900, lng=36.1550, musait=True),
+    dict(isim="İnşaat Makina A.Ş.",       tip="kepce",          ekipman="Komatsu kepçe + kamyon kombo",             telefon="+905338889900", lat=36.2050, lng=36.1900, musait=True),
+
+    # Lojistik
+    dict(isim="Hasan Çelik — TIR",        tip="tirci",          ekipman="40 tonluk TIR, soğutmalı kasa",            telefon="+905551234567", lat=36.2150, lng=36.1250, musait=True),
+    dict(isim="Kızılay Lojistik",         tip="tirci",          ekipman="Çadır, battaniye, gıda paketi x200",       telefon="+905444321098", lat=36.1850, lng=36.1700, musait=False),
+
+    # İtfaiye
+    dict(isim="Hatay İtfaiye 1. Grup",    tip="itfaiye",        ekipman="Yangın söndürme, gaz dedektörü, TÜPGAZ",   telefon="+905319998877", lat=36.2010, lng=36.1580, musait=True),
+
+    # İlaç / Tıbbi
+    dict(isim="Eczacı Ayşe Demir",        tip="ilac",           ekipman="Acil ilaç seti, pansuman malzeme, serum",  telefon="+905302223344", lat=36.2080, lng=36.1620, musait=True),
+
+    # Gönüllüler
+    dict(isim="Öğrenci Gönüllü Grubu",    tip="gonullu",        ekipman="10 kişi, fiziksel destek",                 telefon="+905453334455", lat=36.2000, lng=36.1500, musait=True),
+    dict(isim="Emekli Asker Grubu",       tip="gonullu",        ekipman="5 kişi, koordinasyon deneyimi, telsiz",    telefon="+905467778899", lat=36.1920, lng=36.1660, musait=True),
 ]
 
-KAYNAKLAR = [
-    {"isim": "Mehmet Yılmaz", "tip": "tirci", "ekipman": "50 tonluk vinçli TIR", "lat": 36.5012, "lng": 36.2145, "telefon": "0532 111 2233"},
-    {"isim": "Ahmet Kaya", "tip": "tirci", "ekipman": "Kamyon + platform", "lat": 36.8012, "lng": 36.3012, "telefon": "0533 222 3344"},
-    {"isim": "Dr. Ayşe Demir", "tip": "doktor", "ekipman": "Acil tıp seti", "lat": 36.2145, "lng": 36.1745, "telefon": "0535 333 4455"},
-    {"isim": "Dr. Mustafa Çelik", "tip": "doktor", "ekipman": "Cerrahi ekipman", "lat": 37.0145, "lng": 36.9012, "telefon": "0536 444 5566"},
-    {"isim": "Hemşire Fatma Arslan", "tip": "hemsire", "ekipman": "Serum, pansuman malzemesi", "lat": 36.2312, "lng": 36.1612, "telefon": "0537 555 6677"},
-    {"isim": "Hemşire Zeynep Kurt", "tip": "hemsire", "ekipman": "İlk yardım çantası", "lat": 36.5845, "lng": 36.1534, "telefon": "0538 666 7788"},
-    {"isim": "Ali Öztürk", "tip": "gonullu", "ekipman": "Kepçe operatörü", "lat": 36.2589, "lng": 36.2012, "telefon": "0539 777 8899"},
-    {"isim": "Hasan Şahin", "tip": "gonullu", "ekipman": "Arama kurtarma eğitimli", "lat": 37.5901, "lng": 36.9412, "telefon": "0541 888 9900"},
-    {"isim": "Elif Yıldız", "tip": "gonullu", "ekipman": "Psikolog, kriz müdahale", "lat": 36.2001, "lng": 36.1589, "telefon": "0542 999 0011"},
-    {"isim": "Kadir Aydın", "tip": "tirci", "ekipman": "Vinç + iş makinesi", "lat": 37.7701, "lng": 38.2901, "telefon": "0543 100 1122"},
+# ─── Gerçekçi ihbarlar ────────────────────────────────────────────────────────
+IHBARLAR = [
+    dict(
+        adres="Hatay Antakya, Akdeniz Cad. No:47 — 5 katlı bina",
+        lat=36.2021, lng=36.1601,
+        ses_var=True, kisi_sayisi="5-15", ihtiyac="arama_kurtarma,ambulans",
+        oncelik_skoru=92, guven_skoru=88, durum="yolda",
+        ozet="Enkaz altında 8 kişi sıkışmış. Ses ve hareket tespit edildi. Kritik müdahale gerekiyor.",
+        dakika_once=35,
+    ),
+    dict(
+        adres="İskenderun, Atatürk Bulvarı 120 — çökmüş zemin kat",
+        lat=36.5895, lng=36.1660,
+        ses_var=False, kisi_sayisi="1-5", ihtiyac="vinc,arama_kurtarma",
+        oncelik_skoru=78, guven_skoru=71, durum="bekliyor",
+        ozet="3 kişi enkaz altında. Ağır beton plakalar mevcut, vinç olmadan ulaşılamıyor.",
+        dakika_once=52,
+    ),
+    dict(
+        adres="Defne ilçesi, Çağdaş Mah. Papatya Sok. No:8",
+        lat=36.1727, lng=36.1578,
+        ses_var=True, kisi_sayisi="1-5", ihtiyac="ambulans,ilac",
+        oncelik_skoru=85, guven_skoru=79, durum="bekliyor",
+        ozet="Yaralı var, gaz kokusu bildiriliyor. Acil tıbbi müdahale gerekiyor.",
+        dakika_once=18,
+    ),
+    dict(
+        adres="Samandağ, Sahil Cad. No:3 — bodrum kat su baskını",
+        lat=36.0867, lng=35.9818,
+        ses_var=False, kisi_sayisi="bilinmiyor", ihtiyac="tirci,gonullu",
+        oncelik_skoru=45, guven_skoru=52, durum="bekliyor",
+        ozet="Bodrum katta mahsur kişiler var. Kesin sayı bilinmiyor, iletişim kopuk.",
+        dakika_once=71,
+    ),
+    dict(
+        adres="Antakya, Cumhuriyet Mah. Istiklal Sok. — çöken çatı",
+        lat=36.2065, lng=36.1623,
+        ses_var=False, kisi_sayisi="1-5", ihtiyac="kepce,gonullu",
+        oncelik_skoru=61, guven_skoru=65, durum="tamam",
+        ozet="2 kişi kurtarıldı. Ekip görevden döndü, kaynak serbest.",
+        dakika_once=140,
+    ),
+    dict(
+        adres="Reyhanlı, Merkez Mah. Patlama Bölgesi — büyük hasar",
+        lat=36.2635, lng=36.5538,
+        ses_var=True, kisi_sayisi="15+", ihtiyac="itfaiye,ambulans,arama_kurtarma",
+        oncelik_skoru=95, guven_skoru=84, durum="bekliyor",
+        ozet="Büyük çaplı hasar. 15+ kişi bildirildi. İtfaiye + kurtarma ekibi acil gerekiyor.",
+        dakika_once=8,
+    ),
+    dict(
+        adres="Kırıkhan, Çarşı Cad. No:22 — 3 katlı apartman",
+        lat=36.4973, lng=36.3572,
+        ses_var=False, kisi_sayisi="1-5", ihtiyac="arama_kurtarma",
+        oncelik_skoru=55, guven_skoru=60, durum="bekliyor",
+        ozet="İhbar SMS ile geldi. GPS koordinatı doğrulandı. Enkaz altı kontrol edilmeli.",
+        dakika_once=25,
+    ),
 ]
 
 
 async def seed():
     await init_db()
+
     async with SessionLocal() as db:
-        # Mevcut veriyi temizleme — sadece ekle
-        from sqlalchemy import select, func
-        count = await db.execute(select(func.count()).select_from(Ihbar))
-        if count.scalar() > 5:
-            print("Veritabanında zaten yeterli veri var. Seed atlanıyor.")
-            return
+        # Mevcut veri kontrolü
+        mevcut_k = await db.execute(select(Kaynak))
+        mevcut_i = await db.execute(select(Ihbar))
+        k_sayisi = len(mevcut_k.scalars().all())
+        i_sayisi = len(mevcut_i.scalars().all())
 
-        print("Kaynaklar ekleniyor...")
+        print(f"\n📦 Mevcut: {k_sayisi} kaynak, {i_sayisi} ihbar")
+
+        if k_sayisi > 0 or i_sayisi > 0:
+            cevap = input("⚠️  Veri zaten var. Üstüne eklemek ister misiniz? (e/h): ").strip().lower()
+            if cevap != "e":
+                print("❌ İptal edildi.")
+                return
+
+        # ── Kaynakları ekle
+        print("\n👥 Kaynaklar ekleniyor...")
         for k in KAYNAKLAR:
-            kaynak = Kaynak(**k, musait=True)
-            db.add(kaynak)
+            db.add(Kaynak(
+                isim=k["isim"], tip=k["tip"], ekipman=k["ekipman"],
+                telefon=k["telefon"], lat=k["lat"], lng=k["lng"],
+                musait=k["musait"],
+            ))
+            simge = "✅" if k["musait"] else "🔴"
+            print(f"  {simge} {k['isim']}")
+
         await db.commit()
-        print(f"  {len(KAYNAKLAR)} kaynak eklendi.")
 
-        print("İhbarlar ekleniyor...")
-        eklenen = []
-        for i, ihbar_data in enumerate(IHBARLAR):
-            duplicate_id = None
-            if "duplicate_idx" in ihbar_data:
-                idx = ihbar_data.pop("duplicate_idx")
-                if idx < len(eklenen):
-                    duplicate_id = eklenen[idx].id
-
-            # Geçmişe yayılmış zaman damgaları
-            saat_once = random.randint(1, 28)
-            zaman = datetime.utcnow() - timedelta(hours=saat_once, minutes=random.randint(0, 59))
-
-            ihbar = Ihbar(
-                **{k: v for k, v in ihbar_data.items() if k != "duplicate_idx"},
-                duplicate_id=duplicate_id,
-                durum=random.choice(["bekliyor", "bekliyor", "bekliyor", "yolda", "tamam"]),
+        # ── İhbarları ekle
+        print("\n🆘 İhbarlar ekleniyor...")
+        for i in IHBARLAR:
+            zaman = datetime.utcnow() - timedelta(minutes=i["dakika_once"])
+            db.add(Ihbar(
+                adres=i["adres"], lat=i["lat"], lng=i["lng"],
+                ses_var=i["ses_var"], kisi_sayisi=i["kisi_sayisi"],
+                ihtiyac=i["ihtiyac"], oncelik_skoru=i["oncelik_skoru"],
+                guven_skoru=i["guven_skoru"], durum=i["durum"],
+                ozet=i["ozet"], olusturulma=zaman,
                 embedding_json=json.dumps([0.0] * 384),
-                olusturulma=zaman,
-            )
-            db.add(ihbar)
-            await db.flush()
-            eklenen.append(ihbar)
+            ))
+            sev = "🔴" if i["oncelik_skoru"] >= 70 else ("🟡" if i["oncelik_skoru"] >= 40 else "🟢")
+            print(f"  {sev} [{i['durum']:8}] öncelik:{i['oncelik_skoru']}  {i['adres'][:45]}")
 
         await db.commit()
-        print(f"  {len(IHBARLAR)} ihbar eklendi.")
-        print("\nSeed tamamlandı! Sistemi açıp Operatör Paneli'ne bakabilirsiniz.")
+
+        # ── "yolda" ihbara atama oluştur (gerçekçi görünsün)
+        print("\n🔗 Örnek atama oluşturuluyor...")
+        yolda_q = await db.execute(select(Ihbar).where(Ihbar.durum == "yolda").limit(1))
+        yolda = yolda_q.scalar_one_or_none()
+        gorevde_q = await db.execute(select(Kaynak).where(Kaynak.musait == False).limit(1))
+        gorevde = gorevde_q.scalar_one_or_none()
+
+        if yolda and gorevde:
+            db.add(Atama(
+                ihbar_id=yolda.id, kaynak_id=gorevde.id,
+                notlar="AFAD Arama Kurtarma ekibi yönlendirildi. Tahmini varış: 12 dk."
+            ))
+            await db.commit()
+            print(f"  ✅ İhbar #{yolda.id} ← → {gorevde.isim}")
+
+        # ── Özet
+        print()
+        print("=" * 58)
+        print("  ✅  DEMO VERİSİ YÜKLEME TAMAMLANDI")
+        print("=" * 58)
+        print(f"  Kaynak (görevli) sayısı : {len(KAYNAKLAR)}")
+        print(f"    • Müsait              : {sum(1 for k in KAYNAKLAR if k['musait'])}")
+        print(f"    • Görevde             : {sum(1 for k in KAYNAKLAR if not k['musait'])}")
+        print(f"  İhbar sayısı            : {len(IHBARLAR)}")
+        print(f"    • Kritik (70+)        : {sum(1 for i in IHBARLAR if i['oncelik_skoru'] >= 70)}")
+        print(f"    • Bekliyor            : {sum(1 for i in IHBARLAR if i['durum'] == 'bekliyor')}")
+        print(f"    • Yolda               : {sum(1 for i in IHBARLAR if i['durum'] == 'yolda')}")
+        print(f"    • Tamamlandı          : {sum(1 for i in IHBARLAR if i['durum'] == 'tamam')}")
+        print()
+        print("  🔑  OPERATÖR ŞİFRESİ    : AFET2026")
+        print("  🌐  LOCAL URL           : http://localhost:8000")
+        print("=" * 58)
+
+
+async def seed_silently():
+    """
+    Render / production auto-seed:
+    input() yok — DB boşsa sessizce demo verisi yükler.
+    """
+    from sqlalchemy import select
+
+    await init_db()
+    async with SessionLocal() as db:
+        mevcut = await db.execute(select(Kaynak).limit(1))
+        if mevcut.scalar_one_or_none() is not None:
+            return  # Zaten veri var, dokunma
+
+        print("[AUTO-SEED] DB boş → demo verisi yükleniyor...")
+
+        for k in KAYNAKLAR:
+            db.add(Kaynak(
+                isim=k["isim"], tip=k["tip"], ekipman=k["ekipman"],
+                telefon=k["telefon"], lat=k["lat"], lng=k["lng"],
+                musait=k["musait"],
+            ))
+        await db.commit()
+
+        for i in IHBARLAR:
+            zaman = datetime.utcnow() - timedelta(minutes=i["dakika_once"])
+            db.add(Ihbar(
+                adres=i["adres"], lat=i["lat"], lng=i["lng"],
+                ses_var=i["ses_var"], kisi_sayisi=i["kisi_sayisi"],
+                ihtiyac=i["ihtiyac"], oncelik_skoru=i["oncelik_skoru"],
+                guven_skoru=i["guven_skoru"], durum=i["durum"],
+                ozet=i["ozet"], olusturulma=zaman,
+                embedding_json=json.dumps([0.0] * 384),
+            ))
+        await db.commit()
+
+        # Örnek atama
+        yolda_q = await db.execute(select(Ihbar).where(Ihbar.durum == "yolda").limit(1))
+        yolda = yolda_q.scalar_one_or_none()
+        gorevde_q = await db.execute(select(Kaynak).where(Kaynak.musait == False).limit(1))
+        gorevde = gorevde_q.scalar_one_or_none()
+        if yolda and gorevde:
+            db.add(Atama(
+                ihbar_id=yolda.id, kaynak_id=gorevde.id,
+                notlar="AFAD Arama Kurtarma ekibi yönlendirildi.",
+            ))
+            await db.commit()
+
+        print(f"[AUTO-SEED] ✅ {len(KAYNAKLAR)} kaynak + {len(IHBARLAR)} ihbar yüklendi.")
 
 
 if __name__ == "__main__":

@@ -37,11 +37,12 @@ class IhbarDurumGuncelle(BaseModel):
 
 class KaynakCreate(BaseModel):
     isim: str
-    tip: str = Field(..., pattern="^(tirci|doktor|hemsire|gonullu|diger)$")
+    tip: str = Field(..., pattern="^(arama_kurtarma|ambulans|vinc|kepce|itfaiye|tirci|ilac|gonullu|doktor|hemsire|diger)$")
     ekipman: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
     telefon: Optional[str] = None
+    musait: Optional[bool] = True
 
 
 class KaynakResponse(BaseModel):

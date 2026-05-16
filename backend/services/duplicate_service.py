@@ -12,7 +12,8 @@ def get_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        cache = os.getenv("SENTENCE_TRANSFORMERS_HOME", None)
+        _model = SentenceTransformer("all-MiniLM-L6-v2", cache_folder=cache)
     return _model
 
 

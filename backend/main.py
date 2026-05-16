@@ -22,7 +22,15 @@ print(f"[FRONTEND] dist path: {FRONTEND_DIST} — exists: {FRONTEND_DIST.exists(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # uploads/ klasörü yoksa oluştur
+    Path("uploads").mkdir(exist_ok=True)
     await init_db()
+    # Production'da DB boşsa demo verisi yükle
+    try:
+        from seed import seed_silently
+        await seed_silently()
+    except Exception as e:
+        print(f"[SEED] Atlandı: {e}")
     yield
 
 

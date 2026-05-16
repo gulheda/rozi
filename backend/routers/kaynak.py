@@ -1,11 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import Kaynak
 from schemas import KaynakCreate, KaynakResponse
+from services.sms_service import decode_kaynak_sms
 
 router = APIRouter(prefix="/kaynak", tags=["Kaynak"])
 
@@ -45,6 +46,35 @@ async def musaitlik_guncelle(
     if not kaynak:
         raise HTTPException(status_code=404, detail="Kaynak bulunamadı")
     kaynak.musait = musait
+    await db.commit()
+    await db.refresh(kaynak)
+    return kaynak
+
+
+@router.post("/sms-decode", response_model=KaynakResponse)
+async def kaynak_sms_decode(
+    sms_kodu: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    KAYIT|tip|isim|telefon|lat,lng|ekipman formatındaki SMS'i
+    kaynak olarak sisteme ekler.
+    """
+    try:
+        veri = decode_kaynak_sms(sms_kodu)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    kaynak = Kaynak(
+        tip=veri["tip"],
+        isim=veri["isim"],
+        telefon=veri["telefon"] or None,
+        lat=veri["lat"],
+        lng=veri["lng"],
+        ekipman=veri["ekipman"] or None,
+        musait=True,
+    )
+    db.add(kaynak)
     await db.commit()
     await db.refresh(kaynak)
     return kaynak

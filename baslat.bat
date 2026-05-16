@@ -8,29 +8,43 @@ echo   DISASTERROUTE - BASLATILIYOR
 echo  ==========================================
 echo.
 
-:: Backend'i arka planda baslat
-echo [1/2] Backend baslatiliyor...
-start "DisasterRoute Backend" cmd /k "cd /d C:\Users\hp\projects\rozi\backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
+:: Backend'i baslat (yeni sms.py kodunu almasi icin)
+echo [1/3] Backend baslatiliyor (port 8000)...
+start "DisasterRoute Backend" cmd /k "cd /d C:\Users\hp\projects\rozi\backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
-:: 3 saniye bekle
 timeout /t 3 /nobreak >nul
 
-:: ngrok'u baslat
-echo [2/2] ngrok baslatiliyor...
-start "DisasterRoute ngrok" cmd /k "ngrok http 8000"
+:: ngrok'u STATIK DOMAIN ile baslat
+:: NOT: activate-thinning-departed.ngrok-free.dev senin statik domainin.
+:: Eger degistiyse: ngrok dashboard -> Domains -> kopyala
+echo [2/3] ngrok baslatiliyor (statik domain)...
+start "DisasterRoute ngrok" cmd /k "ngrok http 8000 --domain=activate-thinning-departed.ngrok-free.dev"
 
-:: 2 saniye bekle
+timeout /t 3 /nobreak >nul
+
+:: Frontend dev server
+echo [3/3] Frontend baslatiliyor...
+start "DisasterRoute Frontend" cmd /k "cd /d C:\Users\hp\projects\rozi\frontend && npm run dev"
+
 timeout /t 2 /nobreak >nul
-
-:: Tarayiciyi ac
-echo [3/3] Tarayici aciliyor...
-start chrome "http://localhost:8000"
 
 echo.
 echo  ==========================================
 echo   HAZIR!
-echo   Lokal:  http://localhost:8000
-echo   Mobil:  https://activate-thinning-departed.ngrok-free.dev
+echo.
+echo   Lokal  : http://localhost:5173
+echo   Backend: http://localhost:8000
+echo   Public : https://activate-thinning-departed.ngrok-free.dev
+echo.
+echo   Twilio Webhook URL:
+echo   https://activate-thinning-departed.ngrok-free.dev/sms/webhook
+echo.
+echo   Panel Sifresi: AFET2026
 echo  ==========================================
+echo.
+echo  [!] Twilio'da webhook sunu kontrol et:
+echo      https://console.twilio.com/us1/develop/phone-numbers/manage/incoming
+echo      "A message comes in" alani:
+echo      https://activate-thinning-departed.ngrok-free.dev/sms/webhook
 echo.
 pause

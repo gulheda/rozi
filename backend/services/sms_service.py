@@ -1,8 +1,11 @@
 """
 SMS Encode/Decode Servisi
-Format: EQ|SEV|lat,lng|INJ:n|TRP:n|VOICE:n|GAS:n|NEED:type|ADDR:kisa_adres
 
-Örnek: EQ|RED|36.2021,36.1601|INJ:3|TRP:1|VOICE:1|GAS:0|NEED:CRANE|ADDR:Antakya Akdeniz Cd
+İhbar formatı : EQ|SEV|lat,lng|INJ:n|VOICE:n|GAS:n|NEED:type|CNT:n|ADDR:adres
+Kaynak formatı: KAYIT|tip|isim|telefon|lat,lng|ekipman
+Görev SMS     : [DisasterRoute] GOREV ... (okunabilir metin)
+
+Örnek: EQ|RED|36.2021,36.1601|INJ:1|VOICE:1|GAS:0|NEED:CRANE|CNT:3|ADDR:Antakya
 """
 
 SEVERITY_MAP = {
@@ -115,7 +118,7 @@ def decode_sms(sms: str) -> dict:
 
     guven_skoru = min(guven_skoru, 92)  # SMS max 92 — fotoğraflı form kadar güvenilir değil
 
-    ozet_parcalar = ["SMS ihbarı."]
+    ozet_parcalar = ["📡 SMS ihbarı."]
     if ses_var:
         ozet_parcalar.append("Ses/hareket var.")
     if yarali:
@@ -137,3 +140,76 @@ def decode_sms(sms: str) -> dict:
         "ozet": ozet,
         "sms_kaynakli": True,
     }
+
+
+# ─── Kaynak (görevli) SMS decode ─────────────────────────────────────────────
+# Format: KAYIT|tip|isim|telefon|lat,lng|ekipman
+# Örnek : KAYIT|gonullu|Mehmet Yilmaz|05320000000|36.2021,36.1601|Kamyon
+
+TIP_MAP = {
+    "gonullu": "gonullu", "volunteer": "gonullu",
+    "vinc": "vinc", "crane": "vinc",
+    "ambulans": "ambulans", "ambulance": "ambulans",
+    "arama": "arama_kurtarma", "search": "arama_kurtarma", "arama_kurtarma": "arama_kurtarma",
+    "itfaiye": "itfaiye", "fire": "itfaiye",
+    "tirci": "tirci", "truck": "tirci",
+    "ilac": "ilac", "medicine": "ilac",
+    "kepce": "kepce", "excavator": "kepce",
+}
+
+
+def decode_kaynak_sms(sms: str) -> dict:
+    """KAYIT|tip|isim|telefon|lat,lng|ekipman formatını çözer."""
+    parcalar = [p.strip() for p in sms.strip().split("|")]
+
+    if not parcalar or parcalar[0].upper() != "KAYIT":
+        raise ValueError("Geçersiz format. 'KAYIT|tip|isim|telefon|lat,lng|ekipman' ile başlamalı.")
+
+    tip_raw = parcalar[1].lower() if len(parcalar) > 1 else "gonullu"
+    tip = TIP_MAP.get(tip_raw, "gonullu")
+    isim = parcalar[2] if len(parcalar) > 2 else "Bilinmiyor"
+    telefon = parcalar[3] if len(parcalar) > 3 else ""
+
+    lat, lng = None, None
+    if len(parcalar) > 4 and "," in parcalar[4]:
+        try:
+            lat, lng = map(float, parcalar[4].split(",", 1))
+            if lat == 0.0 and lng == 0.0:
+                lat, lng = None, None
+        except Exception:
+            pass
+
+    ekipman = parcalar[5] if len(parcalar) > 5 else ""
+
+    return {
+        "tip": tip,
+        "isim": isim,
+        "telefon": telefon,
+        "lat": lat,
+        "lng": lng,
+        "ekipman": ekipman,
+        "musait": True,
+    }
+
+
+def gorev_sms_olustur(ihbar_id: int, adres: str, lat, lng, ihtiyac: str, kisi_sayisi: str) -> str:
+    """Atanan görevliye gönderilecek SMS metnini oluşturur."""
+    konum_str = f"GPS: {lat:.4f},{lng:.4f}" if lat and lng else ""
+    maps_link = f"maps.google.com/?q={lat},{lng}" if lat and lng else ""
+    ihtiyac_tr = ihtiyac.replace(",", "+").replace("_", " ")[:30] if ihtiyac else "belirtilmedi"
+
+    satirlar = [
+        f"[DisasterRoute] GOREV ATAMASI",
+        f"Enkaz No: #{ihbar_id}",
+        f"Adres: {adres[:40]}",
+    ]
+    if konum_str:
+        satirlar.append(konum_str)
+    if maps_link:
+        satirlar.append(maps_link)
+    satirlar += [
+        f"Ihtiyac: {ihtiyac_tr}",
+        f"Kisi sayisi: {kisi_sayisi}",
+        f"Goreve hazir olun. Merkeze bildirin.",
+    ]
+    return "\n".join(satirlar)

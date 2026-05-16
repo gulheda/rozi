@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+# uploads/ klasörü app mount edilmeden önce oluşturulmalı
+Path("uploads").mkdir(exist_ok=True)
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

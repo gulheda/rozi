@@ -248,55 +248,39 @@ export default function IhbarForm() {
 
   // ── BAŞARI EKRANI (online mod sonrası) ──────────────────────────────────────
   if (sonuc) {
-    const smsGonder = smsCodOlustur(
-      { adres: sonuc.adres, ses_var: sonuc.ses_var, kisi_sayisi: sonuc.kisi_sayisi, lat: sonuc.lat, lng: sonuc.lng },
-      ihtiyaclar, gaz, yarali
-    )
-    const renk   = sonuc.oncelik_skoru >= 70 ? "text-red-400"   : sonuc.oncelik_skoru >= 40 ? "text-yellow-400" : "text-green-400"
-    const seviye = sonuc.oncelik_skoru >= 70 ? "🔴 KRİTİK" : sonuc.oncelik_skoru >= 40 ? "🟡 ORTA" : "🟢 DÜŞÜK"
-
     return (
       <div className="w-full bg-gray-950 min-h-full">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-          <div className="bg-gray-900 rounded-2xl p-6 border border-green-700 text-center">
-            <div className="text-5xl mb-3">✅</div>
-            <h2 className="text-xl font-bold">İhbar #{sonuc.id} Sisteme Alındı</h2>
-            <p className="text-gray-400 text-sm mt-1">Koordinasyon merkezi bilgilendirildi.</p>
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-4">
+
+          {/* Ana onay kartı */}
+          <div className="bg-gray-900 rounded-2xl p-8 border border-green-700 text-center space-y-3">
+            <div className="text-6xl">✅</div>
+            <h2 className="text-2xl font-bold text-white">İhbarınız Alındı</h2>
+            <p className="text-gray-400 text-sm">
+              İhbar <span className="text-white font-semibold">#{sonuc.id}</span> numarasıyla sisteme kaydedildi.
+            </p>
+            <p className="text-gray-500 text-sm">
+              Koordinasyon merkezi bilgilendirildi. En kısa sürede ekip yönlendirilecektir.
+            </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-gray-900 rounded-xl p-4 text-center">
-              <div className={`text-2xl font-black ${renk}`}>{sonuc.oncelik_skoru}</div>
-              <div className="text-xs text-gray-500 mt-1">Öncelik</div>
-            </div>
-            <div className="bg-gray-900 rounded-xl p-4 text-center">
-              <div className="text-2xl font-black text-blue-400">{sonuc.guven_skoru}</div>
-              <div className="text-xs text-gray-500 mt-1">Güven</div>
-            </div>
-            <div className="bg-gray-900 rounded-xl p-4 text-center">
-              <div className="text-base font-black text-gray-200">{seviye}</div>
-              <div className="text-xs text-gray-500 mt-1">Seviye</div>
-            </div>
-          </div>
-
-          {sonuc.ozet && (
-            <div className="bg-gray-900 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">AI Analizi</p>
-              <p className="text-sm text-gray-200 italic">"{sonuc.ozet}"</p>
-            </div>
-          )}
-
+          {/* Konum bildirimi */}
           {sonuc.duplicate_id && (
-            <div className="bg-yellow-950 border border-yellow-700 rounded-xl p-3 text-sm text-yellow-300">
-              ⚠️ Bu ihbar #{sonuc.duplicate_id} numaralı ihbarla aynı bölge — sistem otomatik birleştirdi.
+            <div className="bg-blue-950 border border-blue-800 rounded-xl p-3 text-sm text-blue-300 text-center">
+              📍 Bölgenizde başka ihbarlar da mevcut — ekipler koordineli müdahale edecek.
             </div>
           )}
 
-          <SmsKutusu smsKodu={smsGonder} kopya={kopya} setKopya={setKopya} />
+          {/* Bilgi notu */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-xs text-gray-500 space-y-1.5">
+            <p>📞 Acil durumda <strong className="text-white">112</strong>'yi arayın.</p>
+            <p>🚫 Enkaz bölgesinden uzaklaşın, kurtarma ekiplerinin çalışmasına izin verin.</p>
+            <p>📶 Telefonu şarjlı tutun, koordinasyon merkezi sizi arayabilir.</p>
+          </div>
 
           <button onClick={sifirla}
-            className="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-xl text-sm font-semibold transition">
-            Yeni ihbar gönder
+            className="w-full bg-red-700 hover:bg-red-600 py-4 rounded-xl text-sm font-bold transition">
+            🆘 Yeni İhbar Gönder
           </button>
         </div>
       </div>

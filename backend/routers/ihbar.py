@@ -16,7 +16,10 @@ from services.ai_service import analiz_et
 from services.duplicate_service import metni_hazirla, embedding_uret, duplicate_bul
 from services.matching_service import kaynak_sirala
 from services.sms_service import decode_sms, encode_sms
+from services.twilio_service import sms_gonder
 from ws_manager import manager
+
+MERKEZ = os.getenv("MERKEZ_PHONE_NUMBER", "")
 
 router = APIRouter(prefix="/ihbar", tags=["İhbar"])
 
@@ -29,9 +32,11 @@ async def ihbar_olustur(
     adres: str = Form(...),
     ses_var: bool = Form(False),
     kisi_sayisi: str = Form("bilinmiyor"),
-    ihtiyac: str = Form("bilinmiyor"),
+    ihtiyac: str = Form("bilinmiyor"),   # virgülle ayrılmış çoklu: "vinç,ambulans"
     lat: Optional[float] = Form(None),
     lng: Optional[float] = Form(None),
+    gaz_kokusu: bool = Form(False),
+    yarali_var: bool = Form(False),
     fotograf: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -86,6 +91,27 @@ async def ihbar_olustur(
         "oncelik_skoru": yeni.oncelik_skoru,
         "kaynak": "form",
     })
+
+    # Koordinasyon merkezine otomatik SMS gönder
+    if MERKEZ:
+        try:
+            ihtiyac_kod = ihtiyac.upper().replace("Ç", "C").replace("Ğ", "G").replace("İ", "I").replace("Ö", "O").replace("Ş", "S").replace("Ü", "U")
+            sev = "RED" if yeni.oncelik_skoru >= 70 else ("ORANGE" if yeni.oncelik_skoru >= 40 else "GREEN")
+            konum = f"LOC:{yeni.lat:.4f},{yeni.lng:.4f}" if yeni.lat and yeni.lng else "LOC:0,0"
+            sms_metni = (
+                f"EQ|{sev}|{konum}"
+                f"|INJ:{'1' if yarali_var else '0'}"
+                f"|VOICE:{'1' if yeni.ses_var else '0'}"
+                f"|GAS:{'1' if gaz_kokusu else '0'}"
+                f"|NEED:{ihtiyac_kod[:30]}"
+                f"|CNT:{yeni.kisi_sayisi}"
+                f"|ADDR:{yeni.adres[:30]}"
+                f"\n#{yeni.id} Öncelik:{yeni.oncelik_skoru}"
+            )
+            sms_gonder(MERKEZ, sms_metni)
+            print(f"[AUTO-SMS] #{yeni.id} → {MERKEZ}")
+        except Exception as e:
+            print(f"[AUTO-SMS] Hata: {e}")
 
     return yeni
 

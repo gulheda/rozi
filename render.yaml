@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: disasterroute
+    name: rozi
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -20,7 +20,5 @@ services:
         value: "0.85"
       - key: DATABASE_URL
         value: "sqlite+aiosqlite:///./disasterroute.db"
-    disk:
-      name: db
-      mountPath: /opt/render/project/src/backend
-      sizeGB: 1
+      - key: PYTHON_VERSION
+        value: "3.11.9"

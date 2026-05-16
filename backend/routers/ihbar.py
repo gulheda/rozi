@@ -116,6 +116,63 @@ async def ihbar_olustur(
     return yeni
 
 
+@router.get("/brifing")
+async def ai_brifing(db: AsyncSession = Depends(get_db)):
+    """Aktif ihbarları GPT-4o ile analiz edip operatöre durum brifing üretir."""
+    result = await db.execute(
+        select(Ihbar).where(Ihbar.durum != "tamam").order_by(Ihbar.oncelik_skoru.desc())
+    )
+    aktif = result.scalars().all()
+
+    if not aktif:
+        return {"brifing": "Şu an aktif ihbar bulunmuyor. Sistem sakin.", "ihbar_sayisi": 0}
+
+    ihbar_metni = "\n".join([
+        f"- #{i.id} [{i.durum.upper()}] Öncelik:{i.oncelik_skoru} | {i.adres} | İhtiyaç:{i.ihtiyac} | Kişi:{i.kisi_sayisi}{' | SES VAR' if i.ses_var else ''}"
+        for i in aktif
+    ])
+
+    prompt = f"""Sen bir afet koordinasyon merkezinin yapay zeka asistanısın. Türkiye deprem senaryosunda çalışıyorsun.
+
+Şu an {len(aktif)} aktif ihbar var. Operatöre kısa, net bir durum brifing hazırla.
+
+AKTİF İHBARLAR:
+{ihbar_metni}
+
+BRİFİNG FORMATI:
+📊 GENEL DURUM: (1-2 cümle, kaç ihbar, genel tablo)
+🔴 KRİTİK: (en acil 2-3 ihbar, neden kritik)
+⚡ ÖNERİLEN AKSİYON: (operatör ne yapmalı şu an)
+
+Türkçe, askeri/operasyonel dil kullan. Kısa ve net ol."""
+
+    try:
+        import os
+        from openai import AsyncOpenAI
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if not api_key.startswith("sk-"):
+            raise Exception("API key yok")
+        client = AsyncOpenAI(api_key=api_key)
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            timeout=20,
+        )
+        brifing = response.choices[0].message.content.strip()
+    except Exception:
+        kritik = [i for i in aktif if i.oncelik_skoru >= 70]
+        orta   = [i for i in aktif if 40 <= i.oncelik_skoru < 70]
+        brifing = (
+            f"📊 GENEL DURUM: {len(aktif)} aktif ihbar — {len(kritik)} kritik, {len(orta)} orta öncelikli.\n\n"
+            f"🔴 KRİTİK: {kritik[0].adres} (öncelik {kritik[0].oncelik_skoru})" if kritik else
+            f"📊 GENEL DURUM: {len(aktif)} aktif ihbar.\n"
+        )
+        brifing += f"\n\n⚡ ÖNERİLEN AKSİYON: En yüksek öncelikli ihbarlara önce müdahale edin."
+
+    return {"brifing": brifing, "ihbar_sayisi": len(aktif)}
+
+
 @router.get("lar", response_model=List[IhbarResponse])
 async def ihbarlari_listele(
     durum: Optional[str] = None,

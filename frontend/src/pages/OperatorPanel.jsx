@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
-import { getIhbarlar, updateIhbarDurum, getEslestir, atamaYap, getKaynaklar, updateKaynakMusait, api, WS_URL } from "../api"
+import { getIhbarlar, updateIhbarDurum, getEslestir, atamaYap, getKaynaklar, updateKaynakMusait, getBrifing, api, WS_URL } from "../api"
 import OperatorGiris from "./OperatorGiris"
 
 // ─── Leaflet ikonları ─────────────────────────────────────────────────────────
@@ -165,6 +166,9 @@ function PanelIci() {
   const [smsPanel, setSmsPanel] = useState(false)
   // WebSocket'ten gelen her mesajda bu artar → KaynakListesi yenilenir
   const [kaynaklarKey, setKaynaklarKey] = useState(0)
+  const [brifingAcik, setBrifingAcik] = useState(false)
+  const [brifingMetin, setBrifingMetin] = useState("")
+  const [brifingYukleniyor, setBrifingYukleniyor] = useState(false)
 
   const yukle = useCallback(async () => {
     try { setIhbarlar(await getIhbarlar()) } catch {}
@@ -248,6 +252,20 @@ function PanelIci() {
 
   const cikis = () => { sessionStorage.removeItem("operator_giris"); window.location.reload() }
 
+  const brifingAl = async () => {
+    setBrifingAcik(true)
+    setBrifingYukleniyor(true)
+    setBrifingMetin("")
+    try {
+      const data = await getBrifing()
+      setBrifingMetin(data.brifing)
+    } catch {
+      setBrifingMetin("⚠️ Brifing alınamadı. Backend bağlantısını kontrol edin.")
+    } finally {
+      setBrifingYukleniyor(false)
+    }
+  }
+
   const filtreli = ihbarlar.filter(i =>
     filtre === "hepsi" ? true :
     filtre === "kritik" ? i.oncelik_skoru >= 70 && i.durum === "bekliyor" :
@@ -265,6 +283,54 @@ function PanelIci() {
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col" style={{ height: "calc(100dvh - 56px)" }}>
+
+      {/* ── AI Brifing Modal (portal → body'e render, z-index sorunu yok) ── */}
+      {brifingAcik && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/75"
+          style={{ zIndex: 99999 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setBrifingAcik(false) }}>
+          <div className="bg-gray-900 border border-purple-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+            style={{ maxHeight: "80vh" }}>
+
+            {/* Başlık */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🤖</span>
+                <div>
+                  <p className="font-bold text-white text-sm">AI Durum Brifing</p>
+                  <p className="text-xs text-gray-500">GPT-4o · Tüm aktif ihbarlar analiz edildi</p>
+                </div>
+              </div>
+              <button onClick={() => setBrifingAcik(false)} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+            </div>
+
+            {/* İçerik */}
+            <div className="p-5 flex-1 overflow-y-auto">
+              {brifingYukleniyor ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-gray-400">
+                  <span className="text-4xl animate-spin inline-block">⚙️</span>
+                  <p className="text-sm">GPT-4o sahayı analiz ediyor...</p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-200 leading-7 whitespace-pre-line">{brifingMetin}</p>
+              )}
+            </div>
+
+            {/* Alt butonlar */}
+            <div className="px-5 py-3 border-t border-gray-800 flex gap-2 justify-end flex-shrink-0">
+              <button onClick={brifingAl}
+                className="px-4 py-2 rounded-lg text-xs bg-purple-800 hover:bg-purple-700 text-white transition">
+                🔄 Yenile
+              </button>
+              <button onClick={() => setBrifingAcik(false)}
+                className="px-4 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ── Üst bar ──────────────────────────────────────────────────────── */}
       <div className="bg-gray-900 border-b border-gray-800 px-3 py-2 flex flex-wrap gap-2 items-center flex-shrink-0 relative">
@@ -305,6 +371,10 @@ function PanelIci() {
             className={`px-2.5 py-1 rounded-lg text-xs border transition
               ${smsPanel ? "bg-orange-900 border-orange-600 text-orange-300" : "border-gray-700 text-gray-400 hover:text-orange-300 hover:border-orange-700"}`}>
             📡 SMS
+          </button>
+          <button onClick={brifingAl}
+            className="px-2.5 py-1 rounded-lg text-xs border border-purple-700 text-purple-300 hover:bg-purple-900/40 transition flex items-center gap-1">
+            🤖 Brifing
           </button>
           <button onClick={cikis}
             className="px-2.5 py-1 rounded-lg text-xs border border-gray-700 text-gray-500 hover:text-red-400 hover:border-red-800 transition">

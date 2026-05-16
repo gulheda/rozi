@@ -40,3 +40,6 @@ export const postKaynak = (body) =>
 
 export const updateKaynakMusait = (id, musait) =>
   api.put(`/kaynak/${id}/musaitlik`, null, { params: { musait } }).then((r) => r.data)
+
+export const getBrifing = () =>
+  api.get("/ihbar/brifing").then((r) => r.data)

@@ -8,8 +8,9 @@ uploads/
 
 # Node
 node_modules/
-dist/
 frontend/.env
+# dist hariç — Render için build'i commit ediyoruz
+frontend/node_modules/
 
 # IDE
 .vscode/

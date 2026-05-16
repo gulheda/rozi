@@ -66,8 +66,8 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-# Frontend'i serve et (build edilmişse)
-if FRONTEND_DIST.exists():
+# Frontend'i serve et (build edilmişse ve assets klasörü varsa)
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
     @app.get("/sw.js")

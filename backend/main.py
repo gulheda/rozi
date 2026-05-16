@@ -30,7 +30,9 @@ async def lifespan(app: FastAPI):
         from seed import seed_silently
         await seed_silently()
     except Exception as e:
-        print(f"[SEED] Atlandı: {e}")
+        import traceback
+        print(f"[SEED] HATA: {e}")
+        traceback.print_exc()
     yield
 
 

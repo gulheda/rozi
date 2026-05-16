@@ -190,10 +190,11 @@ async def seed_silently():
     """
     from sqlalchemy import select
 
-    await init_db()
+    print("[SEED] seed_silently başlıyor...")
     async with SessionLocal() as db:
         mevcut = await db.execute(select(Kaynak).limit(1))
         if mevcut.scalar_one_or_none() is not None:
+            print("[SEED] Zaten veri var, atlandı.")
             return  # Zaten veri var, dokunma
 
         print("[AUTO-SEED] DB boş → demo verisi yükleniyor...")

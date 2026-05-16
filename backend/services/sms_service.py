@@ -96,20 +96,34 @@ def decode_sms(sms: str) -> dict:
     ihtiyac = NEED_MAP.get(veri.get("NEED", "OTHER"), "bilinmiyor")
     adres = veri.get("ADDR", "SMS ile gönderildi")
     gaz = veri.get("GAS", "0") == "1"
+    yarali = veri.get("INJ", "0") == "1"
 
-    guven_skoru = 40
+    # Gerçekçi güven skoru — veri kalitesine göre
+    guven_skoru = 25  # SMS tabanlı ihbar base skoru (form'dan daha az güvenilir)
+    if lat and lng:
+        guven_skoru += 22   # GPS koordinatı doğrulanmış konum
     if ses_var:
-        guven_skoru += 20
-    if lat:
-        guven_skoru += 20
+        guven_skoru += 18   # Canlı sinyal
     if kisi > 0:
-        guven_skoru += 20
+        guven_skoru += 12   # Kişi sayısı belirtilmiş
+    if yarali:
+        guven_skoru += 10   # Yaralı bildirimi (somut bilgi)
+    if gaz:
+        guven_skoru += 5    # Gaz detayı (spesifik gözlem)
+    if len(adres) > 15:
+        guven_skoru += 8    # Detaylı adres
 
-    ozet = (
-        f"SMS ihbarı. {'Ses/hareket var. ' if ses_var else ''}"
-        f"{'Gaz kokusu bildirimi. ' if gaz else ''}"
-        f"{ihtiyac.capitalize()} gerekli."
-    )
+    guven_skoru = min(guven_skoru, 92)  # SMS max 92 — fotoğraflı form kadar güvenilir değil
+
+    ozet_parcalar = ["SMS ihbarı."]
+    if ses_var:
+        ozet_parcalar.append("Ses/hareket var.")
+    if yarali:
+        ozet_parcalar.append(f"{kisi} yaralı.")
+    if gaz:
+        ozet_parcalar.append("Gaz kokusu.")
+    ozet_parcalar.append(f"{ihtiyac.capitalize()} gerekli.")
+    ozet = " ".join(ozet_parcalar)
 
     return {
         "adres": adres,

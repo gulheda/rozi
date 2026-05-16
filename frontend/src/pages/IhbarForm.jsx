@@ -90,31 +90,80 @@ export default function IhbarForm() {
 
   // ── BAŞARI EKRANI ────────────────────────────────────────────────────────────
   if (sonuc) {
+    const oncelik = sonuc.oncelik_skoru || 0
+    const seviye = oncelik >= 70 ? "kritik" : oncelik >= 40 ? "orta" : "düşük"
+    const seviyeRenk = oncelik >= 70
+      ? "border-red-600 bg-red-950/40"
+      : oncelik >= 40
+      ? "border-orange-600 bg-orange-950/40"
+      : "border-green-700 bg-green-950/30"
+    const seviyeText = oncelik >= 70
+      ? "text-red-400"
+      : oncelik >= 40
+      ? "text-orange-400"
+      : "text-green-400"
+    const tahminiVaris = oncelik >= 70 ? "8–15 dakika" : oncelik >= 40 ? "15–30 dakika" : "30–60 dakika"
+
     return (
       <div className="w-full bg-gray-950 min-h-full">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-4">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-4">
 
-          <div className="bg-gray-900 rounded-2xl p-8 border border-green-700 text-center space-y-3">
-            <div className="text-6xl">✅</div>
-            <h2 className="text-2xl font-bold text-white">İhbarınız Alındı</h2>
-            <p className="text-gray-400 text-sm">
-              İhbar <span className="text-white font-semibold">#{sonuc.id}</span> numarasıyla sisteme kaydedildi.
-            </p>
+          {/* Onay başlığı */}
+          <div className="bg-gray-900 rounded-2xl p-6 border border-green-700 text-center space-y-2">
+            <div className="text-5xl">✅</div>
+            <h2 className="text-xl font-bold text-white">İhbarınız Sisteme Alındı</h2>
             <p className="text-gray-500 text-sm">
-              Koordinasyon merkezi bilgilendirildi. En kısa sürede ekip yönlendirilecektir.
+              Takip numaranız: <span className="text-white font-bold">#{sonuc.id}</span>
             </p>
           </div>
 
-          {sonuc.duplicate_id && (
-            <div className="bg-blue-950 border border-blue-800 rounded-xl p-3 text-sm text-blue-300 text-center">
-              📍 Bölgenizde başka ihbarlar da mevcut — ekipler koordineli müdahale edecek.
+          {/* AI Analiz Kartı */}
+          <div className={`rounded-2xl p-5 border space-y-4 ${seviyeRenk}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🤖</span>
+              <span className="text-sm font-bold text-white">Yapay Zeka Değerlendirmesi</span>
+              <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-gray-900 ${seviyeText}`}>
+                {seviye.toUpperCase()}
+              </span>
             </div>
-          )}
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-xs text-gray-500 space-y-1.5">
-            <p>📞 Acil durumda <strong className="text-white">112</strong>'yi arayın.</p>
-            <p>🚫 Enkaz bölgesinden uzaklaşın, kurtarma ekiplerinin çalışmasına izin verin.</p>
-            <p>📶 Telefonu şarjlı tutun, koordinasyon merkezi sizi arayabilir.</p>
+            {sonuc.ozet && (
+              <div className="bg-gray-900/70 rounded-xl p-4">
+                <p className="text-sm text-gray-200 leading-relaxed">"{sonuc.ozet}"</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-900/70 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">Müdahale Önceliği</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-current" style={{color: oncelik >= 70 ? '#ef4444' : oncelik >= 40 ? '#f97316' : '#22c55e'}}></div>
+                  <span className={`text-sm font-bold ${seviyeText}`}>{seviye.charAt(0).toUpperCase() + seviye.slice(1)}</span>
+                </div>
+              </div>
+              <div className="bg-gray-900/70 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">Tahmini Ekip Varışı</p>
+                <p className="text-sm font-bold text-white">{tahminiVaris}</p>
+              </div>
+            </div>
+
+            {sonuc.duplicate_id && (
+              <div className="flex items-start gap-2 text-blue-300 text-sm bg-blue-950/50 rounded-xl p-3">
+                <span>📍</span>
+                <span>Bölgenizde başka ihbarlar da mevcut — ekipler koordineli müdahale edecek.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Ne yapmalısınız */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2.5">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Şu an ne yapmalısınız?</p>
+            <div className="space-y-2 text-sm text-gray-300">
+              <p>📞 Acil durumda <strong className="text-white">112</strong>'yi arayın.</p>
+              <p>🚫 Enkaz bölgesinden uzaklaşın, kurtarma ekiplerinin çalışmasına izin verin.</p>
+              <p>📶 Telefonu şarjlı tutun — koordinasyon merkezi sizi arayabilir.</p>
+              <p>🔕 Gereksiz hareket etmeyin, sesli sinyal verin.</p>
+            </div>
           </div>
 
           <button onClick={sifirla}

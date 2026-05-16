@@ -1,12 +1,16 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from database import init_db
 from routers import ihbar, kaynak, sms
 from ws_manager import manager
+
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -47,6 +51,35 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.get("/")
-async def root():
-    return {"message": "DisasterRoute API çalışıyor", "docs": "/docs"}
+# Frontend'i serve et (build edilmişse)
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+    @app.get("/sw.js")
+    async def service_worker():
+        return FileResponse(str(FRONTEND_DIST / "sw.js"), media_type="application/javascript")
+
+    @app.get("/manifest.webmanifest")
+    async def manifest():
+        return FileResponse(str(FRONTEND_DIST / "manifest.webmanifest"), media_type="application/manifest+json")
+
+    @app.get("/icon-192.png")
+    async def icon192():
+        return FileResponse(str(FRONTEND_DIST / "icon-192.png"))
+
+    @app.get("/icon-512.png")
+    async def icon512():
+        return FileResponse(str(FRONTEND_DIST / "icon-512.png"))
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # API rotaları zaten yukarıda yakalandı, geri kalanlar frontend
+        file_path = FRONTEND_DIST / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+
+else:
+    @app.get("/")
+    async def root():
+        return {"message": "DisasterRoute API çalışıyor", "docs": "/docs"}

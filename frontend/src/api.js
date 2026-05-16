@@ -1,6 +1,9 @@
 import axios from "axios"
 
-const BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
+// Aynı origin üzerinden çalışırsa (ngrok/production) base URL'e gerek yok
+// Geliştirme ortamında 8000 portunu kullan
+const BASE = import.meta.env.VITE_API_URL ||
+  (window.location.port === "5173" ? "http://127.0.0.1:8000" : "")
 
 export const api = axios.create({ baseURL: BASE })
 

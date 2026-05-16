@@ -68,7 +68,9 @@ export default function OperatorPanel() {
 
   useEffect(() => {
     yukle()
-    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws`)
+    const wsPort = window.location.port === "5173" ? "8000" : window.location.port
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:"
+    const ws = new WebSocket(`${wsProto}//${window.location.hostname}${wsPort ? ":" + wsPort : ""}/ws`)
     ws.onmessage = () => yukle()
     return () => ws.close()
   }, [yukle])

@@ -10,7 +10,14 @@ from database import init_db
 from routers import ihbar, kaynak, sms
 from ws_manager import manager
 
-FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+# Birden fazla yerde ara — lokal ve Render için
+_possible = [
+    Path(__file__).parent.parent / "frontend" / "dist",
+    Path(__file__).parent / "frontend" / "dist",
+    Path("/opt/render/project/src/frontend/dist"),
+]
+FRONTEND_DIST = next((p for p in _possible if p.exists()), _possible[0])
+print(f"[FRONTEND] dist path: {FRONTEND_DIST} — exists: {FRONTEND_DIST.exists()}")
 
 
 @asynccontextmanager
